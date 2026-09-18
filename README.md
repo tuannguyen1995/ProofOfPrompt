@@ -2,7 +2,7 @@
 
 > **Track:** Subjective Consensus / AI Governance / Future of Work  
 > **Target Network:** GenLayer Studionet (Chain ID: `61999` / `0xF1EF`, RPC: `https://studio.genlayer.com/api`)  
-> **Live App (Vercel):** [https://frontend-three-drab-v46xpao16q.vercel.app](https://frontend-three-drab-v46xpao16q.vercel.app)  
+> **Live App (Vercel):** [https://proofofprompt.vercel.app](https://proofofprompt.vercel.app)  
 > **GitHub Repository:** [https://github.com/tuannguyen1995/ProofOfPrompt](https://github.com/tuannguyen1995/ProofOfPrompt)  
 > **UI Aesthetic:** Minimal Bauhaus & Gallery Art (`#F7F5F0` canvas, razor-thin `#E2DED4` borders, Syne / Space Grotesk typography, Ultramarine Blue `#1D4ED8`)
 

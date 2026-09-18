@@ -1,0 +1,245 @@
+import React, { useState } from 'react';
+import {
+  Shield,
+  Coins,
+  Scale,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
+  AlertOctagon,
+  Eye,
+  RotateCcw,
+  Sparkles
+} from 'lucide-react';
+import {
+  LicenseVault,
+  VAULT_STATUS_LABELS,
+  formatGen,
+  shortenAddress,
+  getSimilarityScoreColor,
+  getExplorerAddressUrl,
+} from '../utils/helpers';
+
+interface VaultCardProps {
+  vault: LicenseVault;
+  userAddress: `0x${string}` | null;
+  onFileDispute: (vaultId: string) => void;
+  onAdjudicate: (vaultId: string) => Promise<void>;
+  onReclaim: (vaultId: string) => Promise<void>;
+  onInspect: (vault: LicenseVault) => void;
+  isActionLoading: boolean;
+  activeActionVaultId: string | null;
+}
+
+export const VaultCard: React.FC<VaultCardProps> = ({
+  vault,
+  userAddress,
+  onFileDispute,
+  onAdjudicate,
+  onReclaim,
+  onInspect,
+  isActionLoading,
+  activeActionVaultId,
+}) => {
+  const [expanded, setExpanded] = useState(false);
+  const statusMeta = VAULT_STATUS_LABELS[vault.status] || VAULT_STATUS_LABELS[0];
+  const isThisLoading = isActionLoading && activeActionVaultId === vault.vault_id;
+
+  const isCreator = userAddress && userAddress.toLowerCase() === vault.creator.toLowerCase();
+  const isLicensee = userAddress && userAddress.toLowerCase() === vault.licensee.toLowerCase();
+
+  const simColor = getSimilarityScoreColor(vault.similarity_score);
+
+  return (
+    <div className="bg-card border border-linen-300 rounded-xl p-6 shadow-subtle hover:shadow-gallery transition-all flex flex-col justify-between">
+      {/* Top Header */}
+      <div>
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 rounded-lg bg-linen-100 border border-linen-300 flex items-center justify-center font-mono font-bold text-xs text-ink-900">
+              {vault.vault_id}
+            </div>
+            <div>
+              <span className="font-display font-bold text-base text-ink-900">
+                License Escrow Vault
+              </span>
+              <div className="flex items-center space-x-1.5 text-[11px] text-ink-500 font-mono">
+                <span>Blocks: {vault.created_at_block} &rarr; {vault.expires_at_block}</span>
+              </div>
+            </div>
+          </div>
+
+          <span
+            className={`px-2.5 py-1 text-xs font-mono font-semibold rounded-full border ${statusMeta.bg} ${statusMeta.color} ${statusMeta.border}`}
+          >
+            {statusMeta.label}
+          </span>
+        </div>
+
+        {/* Deposit & Similarity Score Hero */}
+        <div className="grid grid-cols-2 gap-3 p-3 bg-linen-50 border border-linen-300 rounded-lg mb-4">
+          <div>
+            <span className="text-[10px] font-mono text-ink-500 uppercase tracking-wider block">
+              Guarantee Escrow
+            </span>
+            <span className="font-mono font-bold text-lg text-ink-900 flex items-center space-x-1">
+              <Coins className="w-4 h-4 text-ultramarine inline mr-1" />
+              {formatGen(vault.escrow_deposit)}
+            </span>
+          </div>
+
+          <div>
+            <span className="text-[10px] font-mono text-ink-500 uppercase tracking-wider block">
+              Similarity Forensic
+            </span>
+            <div className="flex items-center space-x-1.5 mt-0.5">
+              <span className={`text-sm font-mono font-bold px-2 py-0.5 rounded border ${simColor.bg} ${simColor.text} ${simColor.border}`}>
+                {vault.similarity_score}%
+              </span>
+              {vault.verdict !== 'PENDING' && (
+                <span className="text-[10px] font-mono uppercase text-ink-500">
+                  {vault.verdict === 'INFRINGEMENT_CONFIRMED' ? 'Infringed' : 'Clean'}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Parties */}
+        <div className="space-y-1.5 text-xs mb-4">
+          <div className="flex items-center justify-between">
+            <span className="text-ink-500">IP Creator:</span>
+            <a
+              href={getExplorerAddressUrl(vault.creator)}
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-ink-700 hover:text-ultramarine flex items-center space-x-1"
+            >
+              <span>{shortenAddress(vault.creator, 4)}</span>
+              {isCreator && <span className="text-[9px] bg-ultramarine/10 text-ultramarine px-1 rounded">You</span>}
+              <ExternalLink className="w-3 h-3 text-ink-400" />
+            </a>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-ink-500">Licensee:</span>
+            <a
+              href={getExplorerAddressUrl(vault.licensee)}
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-ink-700 hover:text-ultramarine flex items-center space-x-1"
+            >
+              <span>{shortenAddress(vault.licensee, 4)}</span>
+              {isLicensee && <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded">You</span>}
+              <ExternalLink className="w-3 h-3 text-ink-400" />
+            </a>
+          </div>
+        </div>
+
+        {/* Protected Style DNA Accordion */}
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            className="w-full text-left flex items-center justify-between text-xs font-semibold text-ink-700 uppercase tracking-wider py-1 border-b border-linen-200"
+          >
+            <span className="flex items-center space-x-1">
+              <Sparkles className="w-3.5 h-3.5 text-ultramarine" />
+              <span>Protected IP Style DNA & Canary</span>
+            </span>
+            {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+          <div className={`mt-2 text-xs font-sans text-ink-700 bg-linen-50 border border-linen-200 rounded p-2.5 transition-all ${
+            expanded ? 'max-h-60 overflow-y-auto whitespace-pre-wrap' : 'line-clamp-2'
+          }`}>
+            {vault.ip_style_spec}
+          </div>
+        </div>
+
+        {/* Infringement URL indicator if in audit */}
+        {vault.infringement_url && (
+          <div className="mb-4 p-2.5 bg-crimson-light/40 border border-crimson-border rounded-lg text-xs">
+            <span className="font-semibold text-crimson block mb-0.5">Disputed Work Evidence:</span>
+            <a
+              href={vault.infringement_url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-ultramarine hover:underline font-mono truncate block text-[11px]"
+            >
+              {vault.infringement_url}
+            </a>
+          </div>
+        )}
+      </div>
+
+      {/* Action Footer */}
+      <div className="pt-4 border-t border-linen-300 space-y-2">
+        {/* State 0: Active */}
+        {vault.status === 0 && (
+          <div className="flex space-x-2">
+            <button
+              onClick={() => onFileDispute(vault.vault_id)}
+              disabled={isActionLoading}
+              className="flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 text-xs font-semibold text-crimson bg-crimson-light hover:bg-crimson/15 border border-crimson-border rounded-md transition-colors disabled:opacity-50"
+            >
+              <AlertOctagon className="w-3.5 h-3.5" />
+              <span>File Copyright Claim</span>
+            </button>
+            <button
+              onClick={() => onReclaim(vault.vault_id)}
+              disabled={isActionLoading}
+              title="Licensee can reclaim guarantee deposit once term expiration is reached"
+              className="flex items-center justify-center space-x-1 py-2 px-3 text-xs font-medium text-ink-700 bg-linen-100 hover:bg-linen-200 border border-linen-300 rounded-md transition-colors disabled:opacity-50"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reclaim</span>
+            </button>
+          </div>
+        )}
+
+        {/* State 1: Dispute in Audit */}
+        {vault.status === 1 && (
+          <div className="space-y-2">
+            <button
+              onClick={() => onAdjudicate(vault.vault_id)}
+              disabled={isActionLoading}
+              className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 text-xs font-bold text-white bg-ultramarine hover:bg-ultramarine-hover rounded-md shadow-subtle transition-all disabled:opacity-50"
+            >
+              <Scale className={`w-4 h-4 ${isThisLoading ? 'animate-spin' : ''}`} />
+              <span>
+                {isThisLoading ? 'AI Jury Auditing Evidence...' : 'Trigger AI Jury Adjudication'}
+              </span>
+            </button>
+            <p className="text-[10px] text-center text-ink-500">
+              Web scraped live on-chain via GenVM &bull; Consensus comparison
+            </p>
+          </div>
+        )}
+
+        {/* State 2: Slashed or Adjudicated */}
+        {vault.status === 2 && (
+          <div className="flex space-x-2">
+            <button
+              onClick={() => onInspect(vault)}
+              className="flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 text-xs font-semibold text-ink-900 bg-linen-100 hover:bg-linen-200 border border-linen-300 rounded-md transition-colors"
+            >
+              <Eye className="w-3.5 h-3.5 text-ultramarine" />
+              <span>Inspect AI Verdict & Rationale</span>
+            </button>
+          </div>
+        )}
+
+        {/* State 3: Expired / Reclaimed */}
+        {vault.status === 3 && (
+          <button
+            onClick={() => onInspect(vault)}
+            className="w-full flex items-center justify-center space-x-1.5 py-2 px-3 text-xs font-medium text-ink-600 bg-linen-50 border border-linen-200 rounded-md"
+          >
+            <Shield className="w-3.5 h-3.5 text-ink-400" />
+            <span>View Final Settlement Details</span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};

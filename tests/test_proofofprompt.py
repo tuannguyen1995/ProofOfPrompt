@@ -331,3 +331,110 @@ def test_reclaim_stalled_audit_refunds_creator_bond(direct_deploy, direct_vm, di
     assert vault_after["status"] == 3  # EXPIRED_REFUNDED
     assert int(vault_after["creator_bond"]) == 0
 
+
+def test_adjudicate_with_licensee_defense_weighed(direct_deploy, direct_vm, direct_alice, direct_bob):
+    """Test AI Jury adjudicates two-sided dispute evaluating both claim evidence and licensee defense evidence."""
+    creator = direct_alice
+    licensee = direct_bob
+
+    direct_vm.sender = creator
+    deposit_val = 5_000_000_000_000_000_000  # 5 GEN
+    direct_vm.value = deposit_val
+    contract = direct_deploy(str(CONTRACT_PATH))
+    import sys
+    Address = sys.modules["genlayer"].Address
+
+    spec = "Protected Prompt DNA: Cyberpunk Neo-Tokyo with Canary [POP-CANARY-99]"
+    contract.register_license(Address(licensee), spec, 500)
+
+    # 1. Creator files claim with 0.5 GEN dispute bond
+    bond_val = 500_000_000_000_000_000
+    direct_vm.value = bond_val
+    contract.file_infringement_claim("ip-1", "https://artgallery.io/disputed-piece")
+
+    # 2. Licensee submits defense with rebuttal statement & proof URL
+    direct_vm.sender = licensee
+    contract.submit_licensee_defense(
+        "ip-1",
+        "https://defense-repository.org/authorization-cert",
+        "License covers Neo-Tokyo exhibition campaign sub-license approved in writing."
+    )
+
+    # 3. Configure mock web for both creator's claim URL and licensee's defense URL
+    direct_vm.mock_web("https://artgallery.io/disputed-piece", {
+        "status": 200,
+        "body": "Art Exhibition: Neo-Tokyo neon cityscape with canary token [POP-CANARY-99]."
+    })
+    direct_vm.mock_web("https://defense-repository.org/authorization-cert", {
+        "status": 200,
+        "body": "Verified Authorization Certificate: Sub-license permission granted for Neo-Tokyo exhibition."
+    })
+
+    # AI Jury considers defense certificate and dismisses claim as authorized
+    direct_vm.mock_llm(".*", json.dumps({
+        "verdict": "CLEAN_AUTHORIZED",
+        "confidence": 96,
+        "similarity_score": 10,
+        "reason": "Licensee presented valid authorization certificate for exhibition. Commercial output is fully permitted under agreement."
+    }))
+
+    # 4. Adjudicate
+    direct_vm.sender = creator
+    contract.adjudicate_infringement("ip-1")
+
+    vault = json.loads(contract.get_vault("ip-1"))
+    assert vault["status"] == 0  # Reinstated to ACTIVE_LICENSED
+    assert vault["verdict"] == "CLEAN_AUTHORIZED"
+    assert int(vault["creator_bond"]) == 0  # Slashed to licensee as anti-harassment compensation
+    assert "authorization certificate" in vault["reason"].lower()
+
+
+def test_adjudicate_evidence_url_unreachable_dismisses(direct_deploy, direct_vm, direct_alice, direct_bob):
+    """Test AI Jury safely dismisses claim when creator's evidence URL is dead or unreachable."""
+    creator = direct_alice
+    licensee = direct_bob
+
+    direct_vm.sender = creator
+    direct_vm.value = 2_000_000_000_000_000_000
+    contract = direct_deploy(str(CONTRACT_PATH))
+    import sys
+    Address = sys.modules["genlayer"].Address
+
+    contract.register_license(Address(licensee), "Protected DNA", 500)
+
+    direct_vm.value = 100_000_000_000_000_000
+    contract.file_infringement_claim("ip-1", "https://dead-link-404.com/broken")
+
+    # Web mock returns empty / 404 or throws
+    direct_vm.mock_web(".*", {
+        "status": 404,
+        "body": ""
+    })
+
+    direct_vm.sender = creator
+    contract.adjudicate_infringement("ip-1")
+
+    vault = json.loads(contract.get_vault("ip-1"))
+    assert vault["status"] == 0  # Reinstated
+    assert vault["verdict"] == "CLEAN_AUTHORIZED"
+    assert "dismissed due to missing evidence" in vault["reason"]
+
+
+def test_cannot_adjudicate_when_not_in_audit(direct_deploy, direct_vm, direct_alice, direct_bob):
+    """Test that adjudicate_infringement rejects calls if vault is not in active audit status."""
+    creator = direct_alice
+    licensee = direct_bob
+
+    direct_vm.sender = creator
+    direct_vm.value = 1_000_000_000_000_000_000
+    contract = direct_deploy(str(CONTRACT_PATH))
+    import sys
+    Address = sys.modules["genlayer"].Address
+
+    contract.register_license(Address(licensee), "DNA", 500)
+
+    # Vault is in status 0 (LICENSED_ACTIVE), not 1 (IN_AUDIT)
+    with pytest.raises(Exception, match="not awaiting infringement adjudication"):
+        contract.adjudicate_infringement("ip-1")
+
+

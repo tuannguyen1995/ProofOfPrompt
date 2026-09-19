@@ -156,11 +156,14 @@ The testing suite uses `gltest` (the official pytest runner for GenLayer):
 pytest tests/ -v
 ```
 
-### Covered Test Scenarios:
+### Covered Test Scenarios (100% Passing via GenVM Direct Execution):
 - `test_register_license_and_views`: Validates escrow deposit locking, ID indexing, and pagination views.
-- `test_file_infringement_claim`: Verifies creator access control and transition to `IN_AUDIT`.
-- `test_adjudicate_infringement_confirmed_slashes`: Tests AI Jury consensus confirming copyright infringement, slashing the deposit, and transferring liquidated damages to the creator.
-- `test_adjudicate_infringement_clean_resets`: Tests dismissal of unproven claims and resetting vault to active status.
+- `test_file_infringement_claim_with_dispute_bond`: Verifies creator access control, anti-harassment dispute bond, and unauthorized rejections.
+- `test_licensee_submits_defense`: Validates Licensee Right of Defense and unauthorized access rejections.
+- `test_licensee_concedes_claim`: Validates Amicable Settlement / concession escape hatch without court overhead.
+- `test_adjudicate_full_infringement_slashes`: Tests AI Jury consensus confirming copyright piracy and 100% slashing.
+- `test_adjudicate_partial_infringement_graduated_slash`: Tests 3-tier graduated ruling (50% slash / 50% refund for derivative works).
+- `test_adjudicate_clean_compensates_licensee`: Tests dismissal of unproven claims and awarding creator's dispute bond to licensee.
 - `test_reclaim_deposit_expired`: Validates licensee collateral refund upon term conclusion.
 
 ---

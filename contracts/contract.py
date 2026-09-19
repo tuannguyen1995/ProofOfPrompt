@@ -1,5 +1,6 @@
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 from genlayer import *
+from genlayer.gl.vm import UserError
 from dataclasses import dataclass
 import json
 
@@ -60,10 +61,10 @@ class Contract(gl.Contract):
         """
         deposit = bigint(gl.message.value)
         if deposit <= bigint(0):
-            raise gl.UserError("Guarantee escrow deposit must be greater than 0 GEN.")
+            raise UserError("Guarantee escrow deposit must be greater than 0 GEN.")
 
         if not ip_style_spec or len(ip_style_spec.strip()) == 0:
-            raise gl.UserError("IP Style DNA and prompt specification cannot be empty.")
+            raise UserError("IP Style DNA and prompt specification cannot be empty.")
 
         duration = u256(duration_blocks if duration_blocks > 0 else 5000)
 
@@ -105,18 +106,18 @@ class Contract(gl.Contract):
         Optional creator dispute bond attached to discourage frivolous claims.
         """
         if vault_id not in self.vaults:
-            raise gl.UserError(f"Vault {vault_id} does not exist.")
+            raise UserError(f"Vault {vault_id} does not exist.")
 
         v = self.vaults[vault_id]
         if gl.message.sender_address != v.creator:
-            raise gl.UserError("Only the IP creator can file an infringement dispute.")
+            raise UserError("Only the IP creator can file an infringement dispute.")
 
         if v.status != u8(0):
-            raise gl.UserError(f"Vault {vault_id} is not in active licensed status.")
+            raise UserError(f"Vault {vault_id} is not in active licensed status.")
 
         clean_url = evidence_url.strip()
         if not clean_url.startswith("http://") and not clean_url.startswith("https://"):
-            raise gl.UserError("Valid public evidence URL (http/https) is required.")
+            raise UserError("Valid public evidence URL (http/https) is required.")
 
         bond = bigint(gl.message.value)
         self.vault_counter = self.vault_counter + u64(1)
@@ -134,18 +135,18 @@ class Contract(gl.Contract):
         (e.g., license authorization tokens, proof of independent creation, or fair-use context).
         """
         if vault_id not in self.vaults:
-            raise gl.UserError(f"Vault {vault_id} does not exist.")
+            raise UserError(f"Vault {vault_id} does not exist.")
 
         v = self.vaults[vault_id]
         if gl.message.sender_address != v.licensee:
-            raise gl.UserError("Only the authorized licensee can submit a defense.")
+            raise UserError("Only the authorized licensee can submit a defense.")
 
         if v.status != u8(1):
-            raise gl.UserError(f"Vault {vault_id} is not undergoing active infringement audit.")
+            raise UserError(f"Vault {vault_id} is not undergoing active infringement audit.")
 
         clean_url = defense_url.strip()
         if clean_url and not clean_url.startswith("http://") and not clean_url.startswith("https://"):
-            raise gl.UserError("Defense URL must be a valid http/https URL if provided.")
+            raise UserError("Defense URL must be a valid http/https URL if provided.")
 
         v.defense_url = clean_url
         v.defense_statement = defense_statement.strip()
@@ -158,14 +159,14 @@ class Contract(gl.Contract):
         transferring the deposit to the creator and returning the creator's dispute bond.
         """
         if vault_id not in self.vaults:
-            raise gl.UserError(f"Vault {vault_id} does not exist.")
+            raise UserError(f"Vault {vault_id} does not exist.")
 
         v = self.vaults[vault_id]
         if gl.message.sender_address != v.licensee:
-            raise gl.UserError("Only the licensee can concede the claim.")
+            raise UserError("Only the licensee can concede the claim.")
 
         if v.status != u8(1):
-            raise gl.UserError("Can only concede while vault is under audit.")
+            raise UserError("Can only concede while vault is under audit.")
 
         v.status = u8(4)  # MUTUAL_CONCEDED
         v.verdict = "MUTUAL_CONCEDED"
@@ -190,11 +191,11 @@ class Contract(gl.Contract):
         - CLEAN_AUTHORIZED (similarity < 50%)
         """
         if vault_id not in self.vaults:
-            raise gl.UserError(f"Vault {vault_id} does not exist.")
+            raise UserError(f"Vault {vault_id} does not exist.")
 
         v = self.vaults[vault_id]
         if v.status != u8(1):
-            raise gl.UserError(f"Vault {vault_id} is not awaiting infringement adjudication.")
+            raise UserError(f"Vault {vault_id} is not awaiting infringement adjudication.")
 
         evidence_url = v.infringement_url
         defense_url = v.defense_url
@@ -380,11 +381,11 @@ Respond ONLY with valid JSON without markdown code fences:
         Licensee reclaims guarantee deposit after licensing period expires without confirmed infringement.
         """
         if vault_id not in self.vaults:
-            raise gl.UserError(f"Vault {vault_id} does not exist.")
+            raise UserError(f"Vault {vault_id} does not exist.")
 
         v = self.vaults[vault_id]
         if gl.message.sender_address != v.licensee:
-            raise gl.UserError("Only the licensee can reclaim the guarantee deposit.")
+            raise UserError("Only the licensee can reclaim the guarantee deposit.")
 
         self.vault_counter = self.vault_counter + u64(1)
         current_block = u256(int(self.vault_counter))
@@ -392,12 +393,12 @@ Respond ONLY with valid JSON without markdown code fences:
         if v.status == u8(1):
             # Timeout protection: Stalled audit over 50 actions allows licensee to reclaim
             if current_block < (v.audit_started_block + u256(50)):
-                raise gl.UserError("Cannot reclaim: Dispute is currently undergoing active jury audit.")
+                raise UserError("Cannot reclaim: Dispute is currently undergoing active jury audit.")
         elif v.status == u8(0):
             if current_block < v.expires_at_block:
-                raise gl.UserError("Cannot reclaim: License duration has not yet expired.")
+                raise UserError("Cannot reclaim: License duration has not yet expired.")
         else:
-            raise gl.UserError("Vault deposit is already settled or reclaimed.")
+            raise UserError("Vault deposit is already settled or reclaimed.")
 
         v.status = u8(3)  # EXPIRED_REFUNDED
         v.verdict = "CLEAN_EXPIRED"
@@ -414,7 +415,7 @@ Respond ONLY with valid JSON without markdown code fences:
     def get_vault(self, vault_id: str) -> str:
         """Returns JSON serialized representation of a licensing vault."""
         if vault_id not in self.vaults:
-            raise gl.UserError(f"Vault {vault_id} does not exist.")
+            raise UserError(f"Vault {vault_id} does not exist.")
 
         v = self.vaults[vault_id]
         data = {
@@ -444,7 +445,7 @@ Respond ONLY with valid JSON without markdown code fences:
     @gl.public.view
     def get_vault_id_by_index(self, idx: int) -> str:
         if idx < 0 or idx >= len(self.vault_ids):
-            raise gl.UserError("Index out of bounds.")
+            raise UserError("Index out of bounds.")
         return self.vault_ids[idx]
 
     @gl.public.view

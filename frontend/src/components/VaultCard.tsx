@@ -218,20 +218,21 @@ export const VaultCard: React.FC<VaultCardProps> = ({
           <div className="flex space-x-2">
             <button
               onClick={() => onFileDispute(vault.vault_id)}
-              disabled={isActionLoading}
-              className="flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 text-xs font-semibold text-crimson bg-crimson-light hover:bg-crimson/15 border border-crimson-border rounded-md transition-colors disabled:opacity-50"
+              disabled={isActionLoading || (!isCreator && !!userAddress)}
+              title={isCreator ? 'File infringement dispute as IP Creator' : 'Only the registered IP Creator can file a dispute'}
+              className="flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 text-xs font-semibold text-crimson bg-crimson-light hover:bg-crimson/15 border border-crimson-border rounded-md transition-colors disabled:opacity-40"
             >
               <AlertOctagon className="w-3.5 h-3.5" />
-              <span>File Copyright Claim</span>
+              <span>File Claim {isCreator ? '(Creator)' : ''}</span>
             </button>
             <button
               onClick={() => onReclaim(vault.vault_id)}
-              disabled={isActionLoading}
-              title="Licensee can reclaim guarantee deposit once term expiration is reached"
-              className="flex items-center justify-center space-x-1 py-2 px-3 text-xs font-medium text-ink-700 bg-linen-100 hover:bg-linen-200 border border-linen-300 rounded-md transition-colors disabled:opacity-50"
+              disabled={isActionLoading || (!isLicensee && !!userAddress)}
+              title={isLicensee ? 'Licensee can reclaim guarantee deposit once term expiration is reached' : 'Only the registered Licensee can reclaim deposit'}
+              className="flex items-center justify-center space-x-1 py-2 px-3 text-xs font-medium text-ink-700 bg-linen-100 hover:bg-linen-200 border border-linen-300 rounded-md transition-colors disabled:opacity-40"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reclaim</span>
+              <span>Reclaim {isLicensee ? '(Licensee)' : ''}</span>
             </button>
           </div>
         )}
@@ -240,18 +241,22 @@ export const VaultCard: React.FC<VaultCardProps> = ({
         {vault.status === 1 && (
           <div className="space-y-2">
             {/* Licensee Defense options */}
-            {isLicensee && !hasDefense && onSubmitDefense && (
+            {isLicensee && !hasDefense && onSubmitDefense ? (
               <button
                 onClick={() => onSubmitDefense(vault.vault_id)}
                 disabled={isActionLoading}
                 className="w-full flex items-center justify-center space-x-1.5 py-2 px-3 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-md transition-colors"
               >
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Submit Right of Defense (Rebuttal)</span>
+                <span>Submit Right of Defense (Licensee Action)</span>
               </button>
-            )}
+            ) : !hasDefense ? (
+              <div className="text-[11px] text-ink-500 font-sans text-center bg-linen-50 rounded border border-linen-200 py-1.5 px-2.5">
+                Right of defense reserved for Licensee (<span className="font-mono">{shortenAddress(vault.licensee, 3)}</span>)
+              </div>
+            ) : null}
 
-            {/* AI Jury Adjudication */}
+            {/* AI Jury Adjudication - Open to parties, validators, or observers */}
             <button
               onClick={() => onAdjudicate(vault.vault_id)}
               disabled={isActionLoading}
@@ -259,7 +264,7 @@ export const VaultCard: React.FC<VaultCardProps> = ({
             >
               <Scale className={`w-4 h-4 ${isThisLoading ? 'animate-spin' : ''}`} />
               <span>
-                {isThisLoading ? 'AI Jury Auditing Evidence...' : 'Trigger AI Jury Adjudication'}
+                {isThisLoading ? 'AI Jury Auditing Evidence...' : 'Trigger AI Jury Adjudication (Court)'}
               </span>
             </button>
 
@@ -271,7 +276,7 @@ export const VaultCard: React.FC<VaultCardProps> = ({
                 className="w-full flex items-center justify-center space-x-1 py-1.5 px-2 text-[11px] text-ink-600 hover:text-ink-900 bg-linen-50 border border-linen-200 rounded transition-colors"
               >
                 <Handshake className="w-3 h-3 text-ink-500" />
-                <span>Amicably Concede Claim (Settle without Trial)</span>
+                <span>Amicably Concede Claim (Licensee Settle)</span>
               </button>
             )}
 

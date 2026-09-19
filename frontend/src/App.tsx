@@ -14,8 +14,10 @@ import {
 } from 'lucide-react';
 import {
   CONTRACT_ADDRESS,
-  getGenLayerClient,
-  writeContractWithMetaMask,
+  readContractStudionet,
+  fetchStudionetBalance,
+  sendContractTransaction,
+  waitForTransactionReceipt,
   switchToStudionet
 } from './config/genlayer';
 import {
@@ -97,70 +99,80 @@ export const App: React.FC = () => {
   };
 
   /**
-   * Fetches the user's native GEN balance
+   * Fetches real on-chain GEN balance directly from GenLayer Studionet RPC
    */
   const fetchUserBalance = async (userAddr: `0x${string}`) => {
     try {
-      if (!window.ethereum) return;
-      const balHex = (await window.ethereum.request({
-        method: 'eth_getBalance',
-        params: [userAddr, 'latest'],
-      })) as string;
-      if (balHex) {
-        setBalance(BigInt(balHex));
-      }
+      const realBal = await fetchStudionetBalance(userAddr);
+      setBalance(realBal);
     } catch (err) {
-      console.warn('Could not read user balance:', err);
+      console.warn('Could not read user balance from Studionet RPC:', err);
     }
   };
 
   /**
-   * Reads state directly from the GenLayer intelligent contract
+   * Reads state 100% on-chain from GenLayer intelligent contract
    */
   const fetchContractData = useCallback(async () => {
     try {
       setIsRefreshing(true);
-      const client = getGenLayerClient();
 
-      // Read Stats
+      // Read Stats directly on-chain via native gen_call
       try {
-        const rawStats = await client.readContract({
-          address: CONTRACT_ADDRESS as any,
+        const rawStats = await readContractStudionet({
+          address: CONTRACT_ADDRESS,
           functionName: 'get_stats',
           args: [],
         });
-        const parsedStats: VaultStats = typeof rawStats === 'string' ? JSON.parse(rawStats) : rawStats;
-        setStats(parsedStats);
+        if (rawStats) {
+          const parsedStats: VaultStats = JSON.parse(rawStats);
+          setStats(parsedStats);
+        }
       } catch (e) {
-        console.warn('Could not load stats:', e);
+        console.warn('Could not load stats from Studionet contract:', e);
       }
 
-      // Read Vaults
+      // Read Paginated Vaults directly on-chain via native gen_call
       try {
-        const rawVaults = await client.readContract({
-          address: CONTRACT_ADDRESS as any,
+        const rawVaults = await readContractStudionet({
+          address: CONTRACT_ADDRESS,
           functionName: 'get_vaults_paginated',
           args: [0, 50],
         });
-        const parsedVaults: LicenseVault[] = typeof rawVaults === 'string' ? JSON.parse(rawVaults) : rawVaults;
-        setVaults(Array.isArray(parsedVaults) ? parsedVaults : []);
+        if (rawVaults) {
+          const parsedVaults: LicenseVault[] = JSON.parse(rawVaults);
+          setVaults(Array.isArray(parsedVaults) ? parsedVaults : []);
+        }
       } catch (e) {
-        console.warn('Could not load paginated vaults:', e);
+        console.warn('Could not load paginated vaults from Studionet contract:', e);
       }
     } catch (err) {
-      console.error('Failed to fetch contract data:', err);
+      console.error('Failed to fetch contract data from Studionet:', err);
     } finally {
       setIsLoadingData(false);
       setIsRefreshing(false);
     }
   }, []);
 
-  // Initial load and wallet listener
+  // Initial load, auto-connect check, and wallet listeners
   useEffect(() => {
     fetchContractData();
 
-    if (typeof window !== 'undefined' && window.ethereum) {
-      window.ethereum.on?.('accountsChanged', (accounts: string[]) => {
+    if (typeof window !== 'undefined' && (window as any).ethereum) {
+      const ethereum = (window as any).ethereum;
+
+      // Auto-detect already authorized MetaMask account
+      ethereum.request({ method: 'eth_accounts' })
+        .then((accounts: string[]) => {
+          if (accounts && accounts.length > 0) {
+            const userAddr = accounts[0] as `0x${string}`;
+            setAccount(userAddr);
+            fetchUserBalance(userAddr);
+          }
+        })
+        .catch(console.warn);
+
+      ethereum.on?.('accountsChanged', (accounts: string[]) => {
         if (accounts.length > 0) {
           const newAddr = accounts[0] as `0x${string}`;
           setAccount(newAddr);
@@ -171,8 +183,9 @@ export const App: React.FC = () => {
         }
       });
 
-      window.ethereum.on?.('chainChanged', () => {
-        window.location.reload();
+      ethereum.on?.('chainChanged', () => {
+        fetchContractData();
+        if (account) fetchUserBalance(account);
       });
     }
   }, [fetchContractData]);
@@ -198,15 +211,14 @@ export const App: React.FC = () => {
         message: 'Waiting for MetaMask signature to lock guarantee deposit on Studionet...',
       });
 
-      const client = getGenLayerClient();
       const depositWei = parseEther(depositGen);
 
-      const txHash = await writeContractWithMetaMask({
+      const txHash = await sendContractTransaction({
         address: CONTRACT_ADDRESS,
         functionName: 'register_license',
         args: [licensee, spec, duration],
+        from: account,
         value: depositWei,
-        account,
       });
 
       setTxNotice({
@@ -215,7 +227,7 @@ export const App: React.FC = () => {
         txHash,
       });
 
-      await client.waitForTransactionReceipt({ hash: txHash as any });
+      await waitForTransactionReceipt(txHash);
 
       setTxNotice({
         type: 'success',
@@ -254,15 +266,14 @@ export const App: React.FC = () => {
         message: `Filing copyright claim against vault ${vaultId}. Sign with MetaMask...`,
       });
 
-      const client = getGenLayerClient();
       const bondWei = bondGen && parseFloat(bondGen) > 0 ? parseEther(bondGen) : 0n;
 
-      const txHash = await writeContractWithMetaMask({
+      const txHash = await sendContractTransaction({
         address: CONTRACT_ADDRESS,
         functionName: 'file_infringement_claim',
         args: [vaultId, evidenceUrl],
+        from: account,
         value: bondWei,
-        account,
       });
 
       setTxNotice({
@@ -271,7 +282,7 @@ export const App: React.FC = () => {
         txHash,
       });
 
-      await client.waitForTransactionReceipt({ hash: txHash as any });
+      await waitForTransactionReceipt(txHash);
 
       setTxNotice({
         type: 'success',
@@ -280,6 +291,7 @@ export const App: React.FC = () => {
       });
 
       await fetchContractData();
+      if (account) fetchUserBalance(account);
     } catch (err: any) {
       console.error('Claim filing failed:', err);
       setTxNotice({
@@ -310,15 +322,14 @@ export const App: React.FC = () => {
         message: `Submitting licensee defense for vault ${vaultId}. Sign with MetaMask...`,
       });
 
-      const client = getGenLayerClient();
-      const txHash = await writeContractWithMetaMask({
+      const txHash = await sendContractTransaction({
         address: CONTRACT_ADDRESS,
         functionName: 'submit_licensee_defense',
         args: [vaultId, defenseUrl, defenseStatement],
-        account,
+        from: account,
       });
 
-      await client.waitForTransactionReceipt({ hash: txHash as any });
+      await waitForTransactionReceipt(txHash);
 
       setTxNotice({
         type: 'success',
@@ -327,6 +338,7 @@ export const App: React.FC = () => {
       });
 
       await fetchContractData();
+      if (account) fetchUserBalance(account);
     } catch (err: any) {
       console.error('Defense submission failed:', err);
       setTxNotice({
@@ -357,15 +369,14 @@ export const App: React.FC = () => {
         message: `Conceding claim amicably for vault ${vaultId}...`,
       });
 
-      const client = getGenLayerClient();
-      const txHash = await writeContractWithMetaMask({
+      const txHash = await sendContractTransaction({
         address: CONTRACT_ADDRESS,
         functionName: 'concede_claim',
         args: [vaultId],
-        account,
+        from: account,
       });
 
-      await client.waitForTransactionReceipt({ hash: txHash as any });
+      await waitForTransactionReceipt(txHash);
 
       setTxNotice({
         type: 'success',
@@ -374,6 +385,7 @@ export const App: React.FC = () => {
       });
 
       await fetchContractData();
+      if (account) fetchUserBalance(account);
     } catch (err: any) {
       console.error('Concession failed:', err);
       setTxNotice({
@@ -404,12 +416,11 @@ export const App: React.FC = () => {
         message: `Convening on-chain AI Jury for vault ${vaultId}. Validators are scraping evidence and performing forensic analysis...`,
       });
 
-      const client = getGenLayerClient();
-      const txHash = await writeContractWithMetaMask({
+      const txHash = await sendContractTransaction({
         address: CONTRACT_ADDRESS,
         functionName: 'adjudicate_infringement',
         args: [vaultId],
-        account,
+        from: account,
       });
 
       setTxNotice({
@@ -418,7 +429,7 @@ export const App: React.FC = () => {
         txHash,
       });
 
-      await client.waitForTransactionReceipt({ hash: txHash as any });
+      await waitForTransactionReceipt(txHash);
 
       setTxNotice({
         type: 'success',
@@ -457,15 +468,14 @@ export const App: React.FC = () => {
         message: `Initiating deposit refund for vault ${vaultId}...`,
       });
 
-      const client = getGenLayerClient();
-      const txHash = await writeContractWithMetaMask({
+      const txHash = await sendContractTransaction({
         address: CONTRACT_ADDRESS,
         functionName: 'reclaim_deposit',
         args: [vaultId],
-        account,
+        from: account,
       });
 
-      await client.waitForTransactionReceipt({ hash: txHash as any });
+      await waitForTransactionReceipt(txHash);
 
       setTxNotice({
         type: 'success',

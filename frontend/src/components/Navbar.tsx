@@ -1,7 +1,7 @@
 import React from 'react';
 import { ShieldCheck, Wallet, ExternalLink, RefreshCw, AlertTriangle } from 'lucide-react';
 import { shortenAddress, formatGen, getExplorerAddressUrl } from '../utils/helpers';
-import { CONTRACT_ADDRESS, STUDIO_PORTAL_URL } from '../config/genlayer';
+import { CONTRACT_ADDRESS } from '../config/genlayer';
 
 interface NavbarProps {
   account: `0x${string}` | null;
@@ -10,6 +10,8 @@ interface NavbarProps {
   onConnect: () => Promise<void>;
   onRefresh: () => void;
   isRefreshing: boolean;
+  onFaucet?: () => Promise<void>;
+  isFauceting?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -19,6 +21,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onConnect,
   onRefresh,
   isRefreshing,
+  onFaucet,
+  isFauceting,
 }) => {
   const isZeroBalance = account && balance !== null && balance === 0n;
 
@@ -27,20 +31,22 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* Studio Funding Notice Banner if balance is 0 */}
       {isZeroBalance && (
         <div className="bg-amber-light border-b border-amber-border px-4 py-2 text-xs text-amber flex items-center justify-between">
-          <div className="flex items-center space-x-2 max-w-5xl mx-auto w-full">
-            <AlertTriangle className="w-4 h-4 text-amber shrink-0" />
-            <span>
-              Your connected account has <strong>0 GEN</strong> on Studionet. Fund your address by transferring test GEN from the pre-funded accounts in{' '}
-              <a
-                href={`${STUDIO_PORTAL_URL}/contracts`}
-                target="_blank"
-                rel="noreferrer"
-                className="font-semibold underline hover:text-amber-hover"
+          <div className="flex items-center space-x-2 max-w-7xl mx-auto w-full justify-between">
+            <div className="flex items-center space-x-2">
+              <AlertTriangle className="w-4 h-4 text-amber shrink-0" />
+              <span>
+                Your connected account has <strong>0 GEN</strong> on Studionet. Get 10 test GEN instantly:
+              </span>
+            </div>
+            {onFaucet && (
+              <button
+                onClick={onFaucet}
+                disabled={isFauceting}
+                className="px-3 py-1 font-semibold text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded shadow-sm disabled:opacity-50 transition-colors"
               >
-                GenLayer Studio Accounts Panel
-              </a>
-              .
-            </span>
+                {isFauceting ? 'Funding 10 GEN...' : '⚡ Quick Faucet +10 GEN'}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -92,17 +98,29 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Connect / Account state */}
           {account ? (
-            <div className="flex items-center space-x-2 bg-linen-50 border border-linen-300 rounded-md p-1 pl-3">
-              <div className="text-right mr-1">
-                <div className="text-xs font-mono font-semibold text-ink-900">
-                  {balance !== null ? formatGen(balance) : 'Loading...'}
+            <div className="flex items-center space-x-2">
+              {onFaucet && (
+                <button
+                  onClick={onFaucet}
+                  disabled={isFauceting}
+                  title="Claim 10 test GEN from Studionet"
+                  className="px-2.5 py-1 text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded shadow-sm disabled:opacity-50 transition-colors"
+                >
+                  {isFauceting ? 'Funding...' : '⚡ +10 GEN'}
+                </button>
+              )}
+              <div className="flex items-center space-x-2 bg-linen-50 border border-linen-300 rounded-md p-1 pl-3">
+                <div className="text-right mr-1">
+                  <div className="text-xs font-mono font-semibold text-ink-900">
+                    {balance !== null ? formatGen(balance) : 'Loading...'}
+                  </div>
+                  <div className="text-[10px] font-mono text-ink-500">
+                    {shortenAddress(account, 4)}
+                  </div>
                 </div>
-                <div className="text-[10px] font-mono text-ink-500">
-                  {shortenAddress(account, 4)}
+                <div className="w-8 h-8 rounded bg-linen-200 flex items-center justify-center text-ultramarine font-mono text-xs font-bold border border-linen-300">
+                  {account.substring(2, 4).toUpperCase()}
                 </div>
-              </div>
-              <div className="w-8 h-8 rounded bg-linen-200 flex items-center justify-center text-ultramarine font-mono text-xs font-bold border border-linen-300">
-                {account.substring(2, 4).toUpperCase()}
               </div>
             </div>
           ) : (

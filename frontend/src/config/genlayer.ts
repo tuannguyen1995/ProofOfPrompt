@@ -304,6 +304,30 @@ export async function fetchStudionetBalance(address: string): Promise<bigint> {
 }
 
 /**
+ * Request test GEN from Studionet faucet via sim_fundAccount RPC method.
+ */
+export async function fundAccountFromStudionetFaucet(
+  userAddr: string,
+  amountWei: number = 10_000_000_000_000_000_000
+): Promise<string> {
+  const res = await fetch(STUDIONET_RPC_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: Date.now(),
+      method: 'sim_fundAccount',
+      params: [userAddr, amountWei],
+    }),
+  });
+  const json = await res.json();
+  if (json.error) {
+    throw new Error(json.error.message || 'Faucet funding request failed');
+  }
+  return json.result;
+}
+
+/**
  * Sends a real transaction through MetaMask to GenLayer Studionet.
  */
 export async function sendContractTransaction(params: {

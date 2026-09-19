@@ -18,7 +18,8 @@ import {
   fetchStudionetBalance,
   sendContractTransaction,
   waitForTransactionReceipt,
-  switchToStudionet
+  switchToStudionet,
+  fundAccountFromStudionetFaucet
 } from './config/genlayer';
 import {
   LicenseVault,
@@ -38,6 +39,7 @@ export const App: React.FC = () => {
   const [account, setAccount] = useState<`0x${string}` | null>(null);
   const [balance, setBalance] = useState<bigint | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isFauceting, setIsFauceting] = useState(false);
 
   // Contract data state
   const [stats, setStats] = useState<VaultStats | null>(null);
@@ -95,6 +97,41 @@ export const App: React.FC = () => {
       });
     } finally {
       setIsConnecting(false);
+    }
+  };
+
+  /**
+   * Request 10 test GEN from Studionet faucet
+   */
+  const handleFaucet = async () => {
+    if (!account) {
+      await handleConnectWallet();
+      return;
+    }
+
+    try {
+      setIsFauceting(true);
+      setTxNotice({
+        type: 'info',
+        message: 'Requesting 10 test GEN from Studionet faucet for your connected wallet...',
+      });
+
+      await fundAccountFromStudionetFaucet(account);
+
+      setTxNotice({
+        type: 'success',
+        message: 'Faucet successful! 10 test GEN has been credited to your address on Studionet.',
+      });
+
+      await fetchUserBalance(account);
+    } catch (err: any) {
+      console.error('Faucet error:', err);
+      setTxNotice({
+        type: 'error',
+        message: err?.message || 'Faucet funding failed. Try again or use Studio panel.',
+      });
+    } finally {
+      setIsFauceting(false);
     }
   };
 
@@ -521,6 +558,8 @@ export const App: React.FC = () => {
         onConnect={handleConnectWallet}
         onRefresh={fetchContractData}
         isRefreshing={isRefreshing}
+        onFaucet={handleFaucet}
+        isFauceting={isFauceting}
       />
 
       {/* Main Container */}

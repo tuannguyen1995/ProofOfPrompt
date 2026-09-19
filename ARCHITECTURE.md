@@ -17,10 +17,13 @@ In traditional web3 and EVM-compatible networks, intellectual property licensing
 ```mermaid
 stateDiagram-v2
     [*] --> ACTIVE_LICENSED : register_license(payable GEN)
-    ACTIVE_LICENSED --> IN_AUDIT : file_infringement_claim(evidence_url)
+    ACTIVE_LICENSED --> IN_AUDIT : file_infringement_claim(creator_bond)
     ACTIVE_LICENSED --> EXPIRED_REFUNDED : reclaim_deposit(after expiration)
     
-    IN_AUDIT --> INFRINGED_SLASHED : adjudicate_infringement [INFRINGEMENT_CONFIRMED]
+    IN_AUDIT --> IN_AUDIT : submit_licensee_defense(rebuttal, counter_url)
+    IN_AUDIT --> MUTUAL_CONCEDED : concede_claim(licensee settles)
+    IN_AUDIT --> INFRINGED_SLASHED : adjudicate_infringement [FULL_INFRINGEMENT]
+    IN_AUDIT --> PARTIAL_SLASHED : adjudicate_infringement [PARTIAL_INFRINGEMENT]
     IN_AUDIT --> ACTIVE_LICENSED : adjudicate_infringement [CLEAN_AUTHORIZED]
     IN_AUDIT --> EXPIRED_REFUNDED : reclaim_deposit [stalled audit > 50 blocks]
 ```
@@ -30,9 +33,11 @@ stateDiagram-v2
 | Status Code | Enum Name | Description |
 |:---:|:---|:---|
 | `0` | `ACTIVE_LICENSED` | Vault active. Licensee is permitted to generate outputs according to the terms. Escrow locked. |
-| `1` | `IN_AUDIT` | Creator has detected unauthorized commercial use and filed evidence URL. Awaiting AI Jury trial. |
-| `2` | `INFRINGED_SLASHED` | AI Jury confirmed copyright infringement. Guarantee deposit slashed and transferred to Creator. |
+| `1` | `IN_AUDIT` | Creator filed dispute with anti-harassment bond. Licensee can file rebuttal before AI trial. |
+| `2` | `INFRINGED_SLASHED` | AI Jury confirmed full copyright piracy. 100% deposit slashed to Creator; creator bond refunded. |
 | `3` | `EXPIRED_REFUNDED` | Licensing term concluded with zero verified infringements. Guarantee deposit refunded to Licensee. |
+| `4` | `PARTIAL_SLASHED` | AI Jury confirmed partial derivative infringement. 50% deposit slashed to Creator, 50% retained by Licensee. |
+| `5` | `MUTUAL_CONCEDED` | Licensee amicably conceded the dispute without contest. Deposit slashed to Creator, bond returned. |
 
 ---
 
@@ -60,8 +65,14 @@ When `adjudicate_infringement(vault_id)` is invoked:
 
 ---
 
-## 4. Economic Security & Liquidated Damages
+## 4. Two-Sided Economic Security & Dispute Balance
 
-- **Bond Collateral:** The Licensee posts collateral proportional to the commercial value of the licensed style DNA.
-- **Immediate Slashing:** If infringement is verified, `gl.get_contract_at(v.creator).emit_transfer(value=u256(deposit_val))` routes the locked GEN directly to the victim creator.
-- **Zero Centralized Oracles:** Eliminates intermediary arbitration fees or delayed human court proceedings.
+- **Licensee Guarantee Escrow:** The Licensee posts collateral proportional to the commercial value of the licensed style DNA.
+- **Creator Anti-Harassment Dispute Bond:** To discourage bad-faith or frivolous copyright claims intended to harass licensees, creators must stake a deposit bond (default: 10% of escrow, min 0.05 GEN) when filing a dispute.
+  - If the AI Jury confirms infringement (`FULL_INFRINGEMENT` or `PARTIAL_INFRINGEMENT`), the bond is refunded in full to the creator.
+  - If the claim is judged clean (`CLEAN_AUTHORIZED`), the bond is forfeited and awarded directly to the defendant licensee as compensation for harassment.
+- **Licensee Right of Defense:** Licensees can present counter-arguments and proof of authorization (`submit_licensee_defense`). The validator prompt compares both sides before voting.
+- **Graduated Slashing:** 
+  - `FULL_INFRINGEMENT`: 100% licensee deposit slashed to Creator.
+  - `PARTIAL_INFRINGEMENT`: 50% deposit slashed to Creator, 50% saved for Licensee.
+- **Amicable Settlement:** Licensees can settle without trial via `concede_claim`, returning the creator's bond and transferring the deposit cleanly.

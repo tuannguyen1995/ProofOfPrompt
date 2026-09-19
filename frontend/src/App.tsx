@@ -9,7 +9,8 @@ import {
   CheckCircle2,
   ExternalLink,
   Sparkles,
-  Loader2
+  Loader2,
+  ShieldCheck
 } from 'lucide-react';
 import {
   CONTRACT_ADDRESS,
@@ -27,6 +28,7 @@ import { StatsBar } from './components/StatsBar';
 import { RegisterLicense } from './components/RegisterLicense';
 import { VaultCard } from './components/VaultCard';
 import { DisputeClaim } from './components/DisputeClaim';
+import { SubmitDefense } from './components/SubmitDefense';
 import { JuryInspectorModal } from './components/JuryInspectorModal';
 
 export const App: React.FC = () => {
@@ -48,6 +50,7 @@ export const App: React.FC = () => {
   // Modals state
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [disputeTargetVaultId, setDisputeTargetVaultId] = useState<string | null>(null);
+  const [defenseTargetVaultId, setDefenseTargetVaultId] = useState<string | null>(null);
   const [inspectedVault, setInspectedVault] = useState<LicenseVault | null>(null);
 
   // Transaction processing state
@@ -235,9 +238,9 @@ export const App: React.FC = () => {
   };
 
   /**
-   * Action 2: File infringement claim with public URL
+   * Action 2: File infringement claim with public URL and optional dispute bond
    */
-  const handleFileDisputeSubmit = async (vaultId: string, evidenceUrl: string) => {
+  const handleFileDisputeSubmit = async (vaultId: string, evidenceUrl: string, bondGen: string) => {
     if (!account) {
       await handleConnectWallet();
       return;
@@ -252,10 +255,13 @@ export const App: React.FC = () => {
       });
 
       const client = getGenLayerClient();
+      const bondWei = bondGen && parseFloat(bondGen) > 0 ? parseEther(bondGen) : 0n;
+
       const txHash = await writeContractWithMetaMask({
         address: CONTRACT_ADDRESS,
         functionName: 'file_infringement_claim',
         args: [vaultId, evidenceUrl],
+        value: bondWei,
         account,
       });
 
@@ -269,7 +275,7 @@ export const App: React.FC = () => {
 
       setTxNotice({
         type: 'success',
-        message: `Dispute filed! Vault ${vaultId} is now IN_AUDIT. AI Jury is ready for on-chain adjudication.`,
+        message: `Dispute filed! Vault ${vaultId} is now IN_AUDIT. Licensee can submit defense before trial.`,
         txHash,
       });
 
@@ -288,8 +294,101 @@ export const App: React.FC = () => {
   };
 
   /**
-   * Action 3: Trigger on-chain AI Jury adjudication
-   * Fetches the web page live on-chain and runs subjective consensus!
+   * Action 3: Licensee submits Right of Defense (Rebuttal Statement & Proof)
+   */
+  const handleSubmitDefenseSubmit = async (vaultId: string, defenseUrl: string, defenseStatement: string) => {
+    if (!account) {
+      await handleConnectWallet();
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      setActiveActionVaultId(vaultId);
+      setTxNotice({
+        type: 'info',
+        message: `Submitting licensee defense for vault ${vaultId}. Sign with MetaMask...`,
+      });
+
+      const client = getGenLayerClient();
+      const txHash = await writeContractWithMetaMask({
+        address: CONTRACT_ADDRESS,
+        functionName: 'submit_licensee_defense',
+        args: [vaultId, defenseUrl, defenseStatement],
+        account,
+      });
+
+      await client.waitForTransactionReceipt({ hash: txHash as any });
+
+      setTxNotice({
+        type: 'success',
+        message: `Defense registered on-chain! AI Jury will consider both sides during trial.`,
+        txHash,
+      });
+
+      await fetchContractData();
+    } catch (err: any) {
+      console.error('Defense submission failed:', err);
+      setTxNotice({
+        type: 'error',
+        message: err?.message || 'Failed to submit defense. Check contract version.',
+      });
+      throw err;
+    } finally {
+      setActionLoading(false);
+      setActiveActionVaultId(null);
+    }
+  };
+
+  /**
+   * Action 4: Licensee amicably concedes claim to settle
+   */
+  const handleConcede = async (vaultId: string) => {
+    if (!account) {
+      await handleConnectWallet();
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      setActiveActionVaultId(vaultId);
+      setTxNotice({
+        type: 'info',
+        message: `Conceding claim amicably for vault ${vaultId}...`,
+      });
+
+      const client = getGenLayerClient();
+      const txHash = await writeContractWithMetaMask({
+        address: CONTRACT_ADDRESS,
+        functionName: 'concede_claim',
+        args: [vaultId],
+        account,
+      });
+
+      await client.waitForTransactionReceipt({ hash: txHash as any });
+
+      setTxNotice({
+        type: 'success',
+        message: `Claim amicably conceded and settled. Deposit awarded to creator.`,
+        txHash,
+      });
+
+      await fetchContractData();
+    } catch (err: any) {
+      console.error('Concession failed:', err);
+      setTxNotice({
+        type: 'error',
+        message: err?.message || 'Concession failed.',
+      });
+    } finally {
+      setActionLoading(false);
+      setActiveActionVaultId(null);
+    }
+  };
+
+  /**
+   * Action 5: Trigger on-chain AI Jury adjudication
+   * Evaluates both claim and defense live on-chain!
    */
   const handleAdjudicate = async (vaultId: string) => {
     if (!account) {
@@ -315,7 +414,7 @@ export const App: React.FC = () => {
 
       setTxNotice({
         type: 'info',
-        message: 'AI Jury running subjective consensus (gl.vm.run_nondet). This may take 20-40 seconds...',
+        message: 'AI Jury running subjective consensus (gl.vm.run_nondet). Evaluating both sides...',
         txHash,
       });
 
@@ -342,7 +441,7 @@ export const App: React.FC = () => {
   };
 
   /**
-   * Action 4: Reclaim deposit upon term expiration
+   * Action 6: Reclaim deposit upon term expiration
    */
   const handleReclaim = async (vaultId: string) => {
     if (!account) {
@@ -421,13 +520,13 @@ export const App: React.FC = () => {
           <div className="max-w-3xl relative z-10">
             <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-ultramarine-light text-ultramarine border border-ultramarine-border text-xs font-mono font-semibold mb-4">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Self-Enforcing AI Prompt IP & Style Licensing</span>
+              <span>Two-Sided AI Prompt IP Licensing & Copyright Court</span>
             </div>
             <h1 className="font-display font-extrabold text-3xl sm:text-4xl text-ink-900 tracking-tight leading-tight mb-4">
               Autonomous AI Copyright Court on GenLayer
             </h1>
             <p className="text-ink-700 text-sm sm:text-base leading-relaxed mb-6 font-sans">
-              Prompt engineers and creators license master prompt DNA backed by an on-chain infringement guarantee deposit. If a licensee deploys pirated commercial media, our decentralized AI Jury fetches live evidence directly on-chain and adjudicates forensic similarity.
+              Safeguarding both <strong>Creators</strong> (against prompt theft and uncredited commercial exploitation) and <strong>Licensees</strong> (against frivolous claims via anti-harassment bonds, right of rebuttal defense, and 3-tier graduated verdicts).
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <button
@@ -438,16 +537,45 @@ export const App: React.FC = () => {
                 <span>Register AI IP & Lock Escrow</span>
               </button>
               <a
-                href="#registry"
+                href="#two-sided-justice"
                 className="px-5 py-2.5 text-sm font-semibold text-ink-700 bg-linen-100 hover:bg-linen-200 border border-linen-300 rounded-lg transition-colors"
               >
-                Explore Active Licenses
+                How Two-Sided Justice Works
               </a>
             </div>
           </div>
           {/* Subtle Bauhaus geometric decoration */}
           <div className="absolute right-0 top-0 bottom-0 w-1/3 opacity-5 pointer-events-none flex items-center justify-end pr-8">
             <Scale className="w-96 h-96 text-ink-900" />
+          </div>
+        </section>
+
+        {/* Two-Sided Protection Overview Bar */}
+        <section id="two-sided-justice" className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          {/* Licensor / Creator Safeguards */}
+          <div className="bg-card border border-ultramarine-border/80 rounded-xl p-5 shadow-subtle">
+            <div className="flex items-center space-x-2 text-ultramarine font-display font-bold text-sm mb-2">
+              <Shield className="w-4 h-4" />
+              <span>Licensor & Prompt Creator Safeguards</span>
+            </div>
+            <ul className="text-xs text-ink-700 space-y-1.5 list-disc list-inside">
+              <li><strong>Live Web Crawl Evidence:</strong> Direct on-chain verification without trusted oracles.</li>
+              <li><strong>Automated Slashing:</strong> Escrow deposit liquidated directly to creator on breach.</li>
+              <li><strong>Prompt Canary Protection:</strong> Embedded tokens uncover stolen prompt structures.</li>
+            </ul>
+          </div>
+
+          {/* Licensee / Studio Safeguards */}
+          <div className="bg-card border border-emerald-300 rounded-xl p-5 shadow-subtle">
+            <div className="flex items-center space-x-2 text-emerald-800 font-display font-bold text-sm mb-2">
+              <ShieldCheck className="w-4 h-4" />
+              <span>Licensee & Studio Rights of Defense</span>
+            </div>
+            <ul className="text-xs text-ink-700 space-y-1.5 list-disc list-inside">
+              <li><strong>Right of Rebuttal Defense:</strong> Licensees submit counter-proof and fair-use context.</li>
+              <li><strong>Anti-Harassment Staking:</strong> Frivolous creator claims compensate the licensee.</li>
+              <li><strong>3-Tier Proportional Justice:</strong> 50/50 split for borderline derivative inspiration.</li>
+            </ul>
           </div>
         </section>
 
@@ -503,8 +631,8 @@ export const App: React.FC = () => {
             <h2 className="font-display font-bold text-2xl text-ink-900 tracking-tight">
               Intellectual Property Vaults
             </h2>
-            <p className="text-xs text-ink-500">
-              Live on-chain registry of active licenses, pending audits, and adjudicated disputes
+            <p className="text-xs text-ink-500 font-mono">
+              Target Contract: {CONTRACT_ADDRESS} &bull; Studionet 61999
             </p>
           </div>
 
@@ -587,6 +715,8 @@ export const App: React.FC = () => {
                 onAdjudicate={handleAdjudicate}
                 onReclaim={handleReclaim}
                 onInspect={(v) => setInspectedVault(v)}
+                onSubmitDefense={(id) => setDefenseTargetVaultId(id)}
+                onConcede={handleConcede}
                 isActionLoading={actionLoading}
                 activeActionVaultId={activeActionVaultId}
               />
@@ -603,7 +733,7 @@ export const App: React.FC = () => {
             <p className="text-sm text-ink-500 max-w-md mx-auto mb-6">
               {searchQuery
                 ? 'No vaults matched your query. Try clearing the search term or status filter.'
-                : 'Be the first creator to lock an infringement guarantee deposit and register your Master Prompt Style DNA on GenLayer Studionet.'}
+                : 'Connected to contract 0xDB02327FE8cFAbF2066A0AB0Bfd762135E4a0290. Lock an infringement guarantee deposit and register your Master Prompt Style DNA to create the first vault!'}
             </p>
             <button
               onClick={() => setIsRegisterOpen(true)}
@@ -666,6 +796,14 @@ export const App: React.FC = () => {
         vaultId={disputeTargetVaultId}
         onClose={() => setDisputeTargetVaultId(null)}
         onSubmit={handleFileDisputeSubmit}
+        isSubmitting={actionLoading}
+      />
+
+      <SubmitDefense
+        isOpen={!!defenseTargetVaultId}
+        vaultId={defenseTargetVaultId}
+        onClose={() => setDefenseTargetVaultId(null)}
+        onSubmit={handleSubmitDefenseSubmit}
         isSubmitting={actionLoading}
       />
 

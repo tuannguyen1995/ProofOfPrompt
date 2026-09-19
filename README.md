@@ -2,6 +2,7 @@
 
 > **Track:** Subjective Consensus / AI Governance / Future of Work  
 > **Target Network:** GenLayer Studionet (Chain ID: `61999` / `0xF1EF`, RPC: `https://studio.genlayer.com/api`)  
+> **Deployed Contract:** `0xDB02327FE8cFAbF2066A0AB0Bfd762135E4a0290`  
 > **Live App (Vercel):** [https://proofofprompt.vercel.app](https://proofofprompt.vercel.app)  
 > **GitHub Repository:** [https://github.com/tuannguyen1995/ProofOfPrompt](https://github.com/tuannguyen1995/ProofOfPrompt)  
 > **UI Aesthetic:** Minimal Bauhaus & Gallery Art (`#F7F5F0` canvas, razor-thin `#E2DED4` borders, Syne / Space Grotesk typography, Ultramarine Blue `#1D4ED8`)
@@ -13,20 +14,27 @@
 In the generative agent economy, Prompt Engineers, Digital Studios, and Creative AI Directors create proprietary Master System Prompts, video pipelines, and unique aesthetic styles. 
 
 Currently, licensing these digital assets presents a catastrophic dilemma:
-1. **The Licensee's Fear:** Purchasing prompts that fail to produce authentic style outputs, or buying unauthorized knockoffs.
+1. **The Licensee's Fear:** Purchasing prompts that fail to produce authentic style outputs, or facing frivolous copyright accusations from bad-faith creators trying to seize deposits.
 2. **The Creator's Nightmare:** Once licensed, bad actors quietly breach agreement constraints (e.g. generating thousands of unauthorized commercial prints, launching uncredited spin-off merchandise, or redistributing prompt structures).
-3. **The Traditional Blockchain Impasse:** Solidity smart contracts **cannot** inspect a live commercial webpage, cannot parse unstructured visual/textual style indicators, and cannot measure semantic style overlap.
+3. **The Traditional Blockchain Impasse:** Solidity smart contracts **cannot** inspect a live commercial webpage, cannot parse unstructured visual/textual style indicators, and cannot balance evidence from both parties without human intermediaries.
 
-### How ProofOfPrompt Solves This on GenLayer
+### How ProofOfPrompt Solves This: Two-Sided Balanced Justice on GenLayer
 
-ProofOfPrompt introduces a **Self-Enforcing AI IP Licensing Court**:
-1. **License Escrow Vault:** The Licensee or Licensor locks an infringement guarantee deposit in GEN alongside the registered **IP Style DNA & Forensic Canary Markers**.
-2. **Infringement Dispute Filing:** If unauthorized commercial usage is detected, the Creator submits the live public product URL as cryptographic evidence.
-3. **On-Chain AI Copyright Jury:** Validators execute `gl.nondet.web.render(evidence_url, mode="text")` to scrape the live web page directly on-chain without any centralized oracle.
-4. **Subjective Democratic Consensus:** Using `gl.vm.run_nondet(leader_fn, validator_fn)`, the AI Jury analyzes style DNA overlap, fair use boundaries, and canary tokens. Consensus is achieved by strictly validating the semantic **VERDICT** (`INFRINGEMENT_CONFIRMED` vs `CLEAN_AUTHORIZED`), accommodating natural LLM phrasing variance in qualitative rationales.
-5. **Automated Liquidated Damages:**
-   - **Confirmed Infringement:** Escrow deposit is immediately slashed and transferred to the Creator (`gl.get_contract_at(creator).emit_transfer(...)`).
-   - **Clean Expiration:** If the licensing duration concludes with zero confirmed infringements, the deposit is refunded in full to the Licensee.
+ProofOfPrompt introduces a **Self-Enforcing, Balanced AI IP Licensing Court** inspired by proven decentralized dispute resolution patterns:
+
+#### 🛡️ Licensor Safeguards
+1. **License Escrow Vault:** The Licensee locks an infringement guarantee deposit in GEN alongside the registered **IP Style DNA & Forensic Canary Markers**.
+2. **On-Chain Web Scraper:** If unauthorized commercial usage is detected, the Creator submits the live public product URL. Validators execute `gl.nondet.web.render(evidence_url, mode="text")` directly on-chain without any centralized oracle.
+3. **Full Slashing for Blatant Piracy:** Clear copyright violations result in immediate forfeiture of the licensee deposit to the creator.
+
+#### ⚖️ Licensee Safeguards (Two-Sided Protection)
+1. **Anti-Harassment Creator Bond:** Creators must stake an anti-harassment dispute bond when filing a claim. If the claim is judged `CLEAN_AUTHORIZED` (frivolous accusation), the creator's bond is forfeited and awarded directly to the licensee as compensation.
+2. **Right of Defense & Counter-Evidence:** Before trial, the Licensee can submit a formal rebuttal statement and counter-evidence URL (`submit_licensee_defense`). The AI Jury evaluates both perspectives side-by-side.
+3. **Graduated 3-Tier Rulings:** Avoids all-or-nothing binary traps.
+   - `FULL_INFRINGEMENT`: 100% deposit slashed to creator + bond returned.
+   - `PARTIAL_INFRINGEMENT`: 50% deposit slashed to creator, 50% preserved for licensee (balanced fairness for borderline derivative work).
+   - `CLEAN_AUTHORIZED`: Claim dismissed, creator bond forfeited to licensee.
+4. **Amicable Settlement Escape Hatch:** Licensees can concede undisputed claims (`concede_claim`) to settle quickly, returning the creator's bond and avoiding validator overhead.
 
 ---
 

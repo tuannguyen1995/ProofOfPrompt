@@ -5,6 +5,17 @@ All notable changes to the **ProofOfPrompt** protocol and application are docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-09-19
+### Added
+- **Synchronized Deployed Contract Address:** `0xDB02327FE8cFAbF2066A0AB0Bfd762135E4a0290` on GenLayer Studionet.
+- **Two-Sided Justice Architecture:**
+  - **Creator Anti-Harassment Dispute Bond:** Requires creators to stake a bond when initiating a dispute; forfeited to the licensee if the claim is frivolous/clean.
+  - **Licensee Right of Defense (`SubmitDefense` modal):** Licensees can submit a rebuttal defense statement and counter-evidence URL prior to jury trial.
+  - **Amicable Settlement Escape Hatch (`concede_claim`):** Allows licensees to settle uncontested claims immediately, refunding creator bond.
+  - **3-Tier Graduated Rulings:** `FULL_INFRINGEMENT` (100% slash), `PARTIAL_INFRINGEMENT` (50% slash / 50% refund for derivative works), and `CLEAN_AUTHORIZED` (dismissal + bond transfer).
+  - **Split-Screen Comparative Jury Inspector:** Side-by-side analysis of Creator Accusation vs Licensee Rebuttal.
+  - **Comprehensive Two-Sided Justice Section:** Live dashboard statistics on active defense and anti-harassment safeguards.
+
 ## [1.0.0] - 2026-09-18
 
 ### Added

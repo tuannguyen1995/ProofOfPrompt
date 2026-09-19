@@ -9,7 +9,10 @@ import {
   AlertOctagon,
   Eye,
   RotateCcw,
-  Sparkles
+  Sparkles,
+  ShieldCheck,
+  Handshake,
+  FileCheck
 } from 'lucide-react';
 import {
   LicenseVault,
@@ -27,6 +30,8 @@ interface VaultCardProps {
   onAdjudicate: (vaultId: string) => Promise<void>;
   onReclaim: (vaultId: string) => Promise<void>;
   onInspect: (vault: LicenseVault) => void;
+  onSubmitDefense?: (vaultId: string) => void;
+  onConcede?: (vaultId: string) => Promise<void>;
   isActionLoading: boolean;
   activeActionVaultId: string | null;
 }
@@ -38,6 +43,8 @@ export const VaultCard: React.FC<VaultCardProps> = ({
   onAdjudicate,
   onReclaim,
   onInspect,
+  onSubmitDefense,
+  onConcede,
   isActionLoading,
   activeActionVaultId,
 }) => {
@@ -49,6 +56,8 @@ export const VaultCard: React.FC<VaultCardProps> = ({
   const isLicensee = userAddress && userAddress.toLowerCase() === vault.licensee.toLowerCase();
 
   const simColor = getSimilarityScoreColor(vault.similarity_score);
+  const hasDefense = !!vault.defense_statement || !!vault.defense_url;
+  const hasCreatorBond = vault.creator_bond && BigInt(vault.creator_bond) > 0n;
 
   return (
     <div className="bg-card border border-linen-300 rounded-xl p-6 shadow-subtle hover:shadow-gallery transition-all flex flex-col justify-between">
@@ -86,6 +95,11 @@ export const VaultCard: React.FC<VaultCardProps> = ({
               <Coins className="w-4 h-4 text-ultramarine inline mr-1" />
               {formatGen(vault.escrow_deposit)}
             </span>
+            {hasCreatorBond && (
+              <span className="text-[10px] text-emerald-700 font-mono block mt-0.5">
+                + {formatGen(vault.creator_bond)} dispute bond
+              </span>
+            )}
           </div>
 
           <div>
@@ -97,8 +111,8 @@ export const VaultCard: React.FC<VaultCardProps> = ({
                 {vault.similarity_score}%
               </span>
               {vault.verdict !== 'PENDING' && (
-                <span className="text-[10px] font-mono uppercase text-ink-500">
-                  {vault.verdict === 'INFRINGEMENT_CONFIRMED' ? 'Infringed' : 'Clean'}
+                <span className="text-[10px] font-mono uppercase text-ink-500 truncate max-w-[100px]" title={vault.verdict}>
+                  {vault.verdict.replace('_', ' ')}
                 </span>
               )}
             </div>
@@ -156,10 +170,10 @@ export const VaultCard: React.FC<VaultCardProps> = ({
           </div>
         </div>
 
-        {/* Infringement URL indicator if in audit */}
+        {/* Infringement claim box if in audit */}
         {vault.infringement_url && (
-          <div className="mb-4 p-2.5 bg-crimson-light/40 border border-crimson-border rounded-lg text-xs">
-            <span className="font-semibold text-crimson block mb-0.5">Disputed Work Evidence:</span>
+          <div className="mb-3 p-2.5 bg-crimson-light/40 border border-crimson-border rounded-lg text-xs">
+            <span className="font-semibold text-crimson block mb-0.5">Creator Claim Evidence:</span>
             <a
               href={vault.infringement_url}
               target="_blank"
@@ -168,6 +182,31 @@ export const VaultCard: React.FC<VaultCardProps> = ({
             >
               {vault.infringement_url}
             </a>
+          </div>
+        )}
+
+        {/* Licensee Defense Proof box if submitted */}
+        {hasDefense && (
+          <div className="mb-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs">
+            <span className="font-semibold text-emerald-800 flex items-center space-x-1 mb-0.5">
+              <FileCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Licensee Defense Submitted:</span>
+            </span>
+            {vault.defense_statement && (
+              <p className="text-[11px] text-ink-700 italic line-clamp-2 mb-1">
+                &ldquo;{vault.defense_statement}&rdquo;
+              </p>
+            )}
+            {vault.defense_url && (
+              <a
+                href={vault.defense_url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-emerald-700 hover:underline font-mono truncate block text-[11px]"
+              >
+                {vault.defense_url}
+              </a>
+            )}
           </div>
         )}
       </div>
@@ -200,6 +239,19 @@ export const VaultCard: React.FC<VaultCardProps> = ({
         {/* State 1: Dispute in Audit */}
         {vault.status === 1 && (
           <div className="space-y-2">
+            {/* Licensee Defense options */}
+            {isLicensee && !hasDefense && onSubmitDefense && (
+              <button
+                onClick={() => onSubmitDefense(vault.vault_id)}
+                disabled={isActionLoading}
+                className="w-full flex items-center justify-center space-x-1.5 py-2 px-3 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-md transition-colors"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Submit Right of Defense (Rebuttal)</span>
+              </button>
+            )}
+
+            {/* AI Jury Adjudication */}
             <button
               onClick={() => onAdjudicate(vault.vault_id)}
               disabled={isActionLoading}
@@ -210,21 +262,34 @@ export const VaultCard: React.FC<VaultCardProps> = ({
                 {isThisLoading ? 'AI Jury Auditing Evidence...' : 'Trigger AI Jury Adjudication'}
               </span>
             </button>
+
+            {/* Optional Amicable Concede */}
+            {isLicensee && onConcede && (
+              <button
+                onClick={() => onConcede(vault.vault_id)}
+                disabled={isActionLoading}
+                className="w-full flex items-center justify-center space-x-1 py-1.5 px-2 text-[11px] text-ink-600 hover:text-ink-900 bg-linen-50 border border-linen-200 rounded transition-colors"
+              >
+                <Handshake className="w-3 h-3 text-ink-500" />
+                <span>Amicably Concede Claim (Settle without Trial)</span>
+              </button>
+            )}
+
             <p className="text-[10px] text-center text-ink-500">
-              Web scraped live on-chain via GenVM &bull; Consensus comparison
+              Two-sided evidence evaluated by GenLayer multi-validator jury
             </p>
           </div>
         )}
 
-        {/* State 2: Slashed or Adjudicated */}
-        {vault.status === 2 && (
+        {/* State 2, 4, 5: Adjudicated / Settled */}
+        {(vault.status === 2 || vault.status === 4 || vault.status === 5) && (
           <div className="flex space-x-2">
             <button
               onClick={() => onInspect(vault)}
               className="flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 text-xs font-semibold text-ink-900 bg-linen-100 hover:bg-linen-200 border border-linen-300 rounded-md transition-colors"
             >
               <Eye className="w-3.5 h-3.5 text-ultramarine" />
-              <span>Inspect AI Verdict & Rationale</span>
+              <span>Inspect AI Verdict & Two-Sided Analysis</span>
             </button>
           </div>
         )}
@@ -236,7 +301,7 @@ export const VaultCard: React.FC<VaultCardProps> = ({
             className="w-full flex items-center justify-center space-x-1.5 py-2 px-3 text-xs font-medium text-ink-600 bg-linen-50 border border-linen-200 rounded-md"
           >
             <Shield className="w-3.5 h-3.5 text-ink-400" />
-            <span>View Final Settlement Details</span>
+            <span>View Clean Settlement Record</span>
           </button>
         )}
       </div>

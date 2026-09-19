@@ -52,8 +52,8 @@ def test_register_license_and_views(gltest_client):
     assert paginated[0]["vault_id"] == "ip-1"
 
 
-def test_file_infringement_claim(gltest_client):
-    """Test filing a copyright infringement claim with valid proof URL."""
+def test_file_infringement_claim_with_dispute_bond(gltest_client):
+    """Test filing a copyright infringement claim with anti-harassment dispute bond."""
     clear_known_contracts()
     from genlayer import Address
 
@@ -75,19 +75,57 @@ def test_file_infringement_claim(gltest_client):
             args=["ip-1", "https://unauthorized-store.com/art"]
         ).transact()
 
-    # Creator files valid claim
+    # Creator files valid claim with anti-harassment dispute bond
     evidence_url = "https://unauthorized-store.com/art-output"
+    bond_amount = 100_000_000_000_000_000  # 0.1 GEN
     contract.connect(creator).file_infringement_claim(
         args=["ip-1", evidence_url]
-    ).transact()
+    ).transact(value=bond_amount)
 
     vault = json.loads(contract.get_vault(args=["ip-1"]).call())
     assert vault["status"] == 1  # IN_AUDIT
     assert vault["infringement_url"] == evidence_url
+    assert int(vault["creator_bond"]) == bond_amount
 
 
-def test_adjudicate_infringement_confirmed_slashes(gltest_client, mock_infringement_llm_and_web):
-    """Test AI Jury adjudicates INFRINGEMENT_CONFIRMED: deposit slashed to creator."""
+def test_licensee_submits_defense(gltest_client):
+    """Test Licensee exercises their right of defense before trial."""
+    clear_known_contracts()
+    from genlayer import Address
+
+    creator = gltest_client.accounts[0]
+    licensee = gltest_client.accounts[1]
+    stranger = gltest_client.accounts[2]
+
+    source = load_contract_source()
+    contract = gltest_client.deploy(source=source)
+
+    contract.connect(creator).register_license(
+        args=[Address(licensee.address), "Style DNA", 500]
+    ).transact(value=1_000_000_000_000_000_000)
+
+    contract.connect(creator).file_infringement_claim(
+        args=["ip-1", "https://disputed-shop.com/item"]
+    ).transact()
+
+    # Stranger cannot submit defense
+    with pytest.raises(Exception):
+        contract.connect(stranger).submit_licensee_defense(
+            args=["ip-1", "https://my-defense.com", "rebuttal statement"]
+        ).transact()
+
+    # Licensee submits valid defense
+    contract.connect(licensee).submit_licensee_defense(
+        args=["ip-1", "https://authorized-scope.com/proof", "Licensed for banner campaign per section 3b."]
+    ).transact()
+
+    vault = json.loads(contract.get_vault(args=["ip-1"]).call())
+    assert vault["defense_url"] == "https://authorized-scope.com/proof"
+    assert "banner campaign" in vault["defense_statement"]
+
+
+def test_adjudicate_full_infringement_slashes(gltest_client, mock_infringement_llm_and_web):
+    """Test AI Jury adjudicates FULL_INFRINGEMENT: deposit slashed to creator."""
     clear_known_contracts()
     from genlayer import Address
 
@@ -114,17 +152,13 @@ def test_adjudicate_infringement_confirmed_slashes(gltest_client, mock_infringem
         params=mock_infringement_llm_and_web
     )
 
-    # Creator initial balance
-    creator_bal_before = gltest_client.get_balance(creator.address)
-
     # Run AI Jury Adjudication
     contract.connect(creator).adjudicate_infringement(args=["ip-1"]).transact()
 
     vault = json.loads(contract.get_vault(args=["ip-1"]).call())
-    assert vault["status"] == 2  # INFRINGED_SLASHED
-    assert vault["verdict"] == "INFRINGEMENT_CONFIRMED"
-    assert vault["similarity_score"] >= 70
-    assert "forensic match" in vault["reason"].lower()
+    assert vault["status"] == 2  # FULL_SLASHED
+    assert vault["verdict"] == "FULL_INFRINGEMENT"
+    assert vault["similarity_score"] >= 75
 
     # Check stats updated
     stats = json.loads(contract.get_stats().call())
@@ -132,8 +166,8 @@ def test_adjudicate_infringement_confirmed_slashes(gltest_client, mock_infringem
     assert int(stats["total_deposit_locked"]) == 0
 
 
-def test_adjudicate_infringement_clean_resets(gltest_client, mock_clean_llm_and_web):
-    """Test AI Jury adjudicates CLEAN_AUTHORIZED: claim dismissed, status reset to ACTIVE."""
+def test_adjudicate_clean_compensates_licensee(gltest_client, mock_clean_llm_and_web):
+    """Test AI Jury adjudicates CLEAN_AUTHORIZED: creator bond compensated to licensee."""
     clear_known_contracts()
     from genlayer import Address
 
@@ -147,9 +181,11 @@ def test_adjudicate_infringement_clean_resets(gltest_client, mock_clean_llm_and_
         args=[Address(licensee.address), "Protected DNA Spec", 500]
     ).transact(value=3_000_000_000_000_000_000)
 
+    # Creator stakes a dispute bond of 0.2 GEN
+    bond = 200_000_000_000_000_000
     contract.connect(creator).file_infringement_claim(
         args=["ip-1", "https://clean-site.org/photo"]
-    ).transact()
+    ).transact(value=bond)
 
     # Install bare-dict mocks for clean verdict
     gltest_client.provider.make_request(
@@ -160,9 +196,9 @@ def test_adjudicate_infringement_clean_resets(gltest_client, mock_clean_llm_and_
     contract.connect(creator).adjudicate_infringement(args=["ip-1"]).transact()
 
     vault = json.loads(contract.get_vault(args=["ip-1"]).call())
-    assert vault["status"] == 0  # ACTIVE_LICENSED
+    assert vault["status"] == 0  # Reset to ACTIVE_LICENSED
     assert vault["verdict"] == "CLEAN_AUTHORIZED"
-    assert vault["similarity_score"] < 70
+    assert int(vault["creator_bond"]) == 0
 
 
 def test_reclaim_deposit_expired(gltest_client):

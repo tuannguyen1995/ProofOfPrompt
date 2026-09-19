@@ -294,3 +294,40 @@ def test_reclaim_deposit_expired(direct_deploy, direct_vm, direct_alice, direct_
     assert vault["status"] == 3  # EXPIRED_REFUNDED
     assert vault["verdict"] == "CLEAN_EXPIRED"
 
+
+def test_reclaim_stalled_audit_refunds_creator_bond(direct_deploy, direct_vm, direct_alice, direct_bob):
+    """Test that if an audit stalls over 50 blocks, licensee can reclaim and creator bond is safely refunded."""
+    creator = direct_alice
+    licensee = direct_bob
+
+    direct_vm.sender = creator
+    direct_vm.value = 2_000_000_000_000_000_000  # 2 GEN
+    contract = direct_deploy(str(CONTRACT_PATH))
+    import sys
+    Address = sys.modules["genlayer"].Address
+
+    contract.register_license(Address(licensee), "Spec DNA", 5000)
+
+    # Creator files claim with 0.5 GEN bond
+    direct_vm.value = 500_000_000_000_000_000
+    contract.file_infringement_claim("ip-1", "https://evidence.com")
+
+    vault_before = json.loads(contract.get_vault("ip-1"))
+    assert vault_before["status"] == 1  # IN_AUDIT
+    assert int(vault_before["creator_bond"]) == 500_000_000_000_000_000
+
+    # Advance vault counter past 50 blocks by registering temporary vaults or simulating blocks
+    for _ in range(55):
+        direct_vm.sender = licensee
+        # Just advance by incrementing counter
+        direct_vm.value = 1
+        contract.register_license(Address(licensee), "Temp", 100)
+
+    # Licensee reclaims after stalled audit
+    direct_vm.sender = licensee
+    contract.reclaim_deposit("ip-1")
+
+    vault_after = json.loads(contract.get_vault("ip-1"))
+    assert vault_after["status"] == 3  # EXPIRED_REFUNDED
+    assert int(vault_after["creator_bond"]) == 0
+

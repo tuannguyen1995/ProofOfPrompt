@@ -901,7 +901,7 @@ export const App: React.FC = () => {
             <p className="text-sm text-ink-500 max-w-md mx-auto mb-6">
               {searchQuery
                 ? 'No vaults matched your query. Try clearing the search term or status filter.'
-                : 'Connected to contract 0x74E491a16C3f2743731D5DF268c36A75A1C836D9. Lock an infringement guarantee deposit and register your Master Prompt Style DNA to create the first vault!'}
+                : `Connected to contract ${CONTRACT_ADDRESS}. Propose your Master Prompt Style DNA to create the first vault!`}
             </p>
             <button
               onClick={() => setIsRegisterOpen(true)}

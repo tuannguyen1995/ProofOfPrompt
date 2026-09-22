@@ -113,7 +113,7 @@ def deploy():
     if readme_file.exists():
         with open(readme_file, "r", encoding="utf-8") as f:
             readme_content = f.read()
-        readme_content = re.sub(r"0x74E491a16C3f2743731D5DF268c36A75A1C836D9", contract_address, readme_content)
+        readme_content = re.sub(r"> \*\*Deployed Contract:\*\* \`0x[0-9a-fA-F]+\`", f"> **Deployed Contract:** `{contract_address}`", readme_content)
         with open(readme_file, "w", encoding="utf-8") as f:
             f.write(readme_content)
         print(f"[+] Updated README.md with {contract_address}")

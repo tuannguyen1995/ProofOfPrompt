@@ -30,12 +30,25 @@ def deploy():
         contract_code = f.read()
 
     print("[+] Submitting deploy_contract transaction to Studionet...", flush=True)
-    tx_hash = client.deploy_contract(
-        code=contract_code,
-        account=account,
-        args=[],
-        leader_only=False
-    )
+    tx_hash = None
+    for attempt in range(1, 4):
+        try:
+            tx_hash = client.deploy_contract(
+                code=contract_code,
+                account=account,
+                args=[],
+                leader_only=False
+            )
+            break
+        except Exception as e:
+            print(f"[!] Attempt {attempt} failed: {e}. Retrying in 5s...", flush=True)
+            import time
+            time.sleep(5)
+
+    if not tx_hash:
+        print("[!] All deployment attempts failed.", flush=True)
+        return
+
     print(f"[+] Deployment Transaction Hash: {tx_hash}", flush=True)
     print("[+] Waiting for validator consensus and block receipt...", flush=True)
 

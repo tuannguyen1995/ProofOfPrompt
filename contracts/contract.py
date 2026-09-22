@@ -92,9 +92,9 @@ class Contract(gl.Contract):
                 ts = int(datetime.datetime.fromisoformat(s).timestamp())
                 if ts > 0:
                     return bigint(ts)
-        except Exception:
-            pass
-        return bigint(0)
+        except Exception as e:
+            raise gl.UserError(f"Failed to parse trusted execution timestamp: {e}")
+        raise gl.UserError("Trusted execution timestamp unavailable from runtime.")
 
     @gl.public.write
     def propose_license(
@@ -291,7 +291,7 @@ class Contract(gl.Contract):
 
         total_payout = deposit_val + creator_bond
         if total_payout > bigint(0):
-            gl.get_contract_at(v.creator).emit_transfer(value=u256(total_payout))
+            gl.get_contract_at(v.creator).emit_transfer(value=total_payout)
 
     @gl.public.write
     def propose_mutual_split(self, vault_id: str) -> None:
@@ -344,11 +344,11 @@ class Contract(gl.Contract):
         # Creator receives 50% deposit + 100% of their dispute bond
         creator_total = half_deposit + creator_bond
         if creator_total > bigint(0):
-            gl.get_contract_at(v.creator).emit_transfer(value=u256(creator_total))
+            gl.get_contract_at(v.creator).emit_transfer(value=creator_total)
 
         # Licensee receives remaining 50% deposit
         if rem_deposit > bigint(0):
-            gl.get_contract_at(v.licensee).emit_transfer(value=u256(rem_deposit))
+            gl.get_contract_at(v.licensee).emit_transfer(value=rem_deposit)
 
     @gl.public.write
     def adjudicate_infringement(self, vault_id: str) -> None:
@@ -526,7 +526,7 @@ Respond ONLY with valid JSON without markdown code fences:
             self.total_deposit_locked = self.total_deposit_locked - deposit_val
             self.total_disputes_resolved = self.total_disputes_resolved + u32(1)
             # Full slash: 100% deposit + returned creator bond paid to Creator
-            gl.get_contract_at(v.creator).emit_transfer(value=u256(deposit_val + creator_bond))
+            gl.get_contract_at(v.creator).emit_transfer(value=deposit_val + creator_bond)
 
         elif verdict == "PARTIAL_INFRINGEMENT":
             v.status = STATUS_PARTIAL_SLASHED  # 6: PARTIAL_SLASHED
@@ -538,10 +538,10 @@ Respond ONLY with valid JSON without markdown code fences:
             rem_deposit = deposit_val - half_deposit
 
             # Creator receives 50% liquidated damages + their dispute bond back
-            gl.get_contract_at(v.creator).emit_transfer(value=u256(half_deposit + creator_bond))
+            gl.get_contract_at(v.creator).emit_transfer(value=half_deposit + creator_bond)
             # Licensee retains 50% of their collateral
             if rem_deposit > bigint(0):
-                gl.get_contract_at(v.licensee).emit_transfer(value=u256(rem_deposit))
+                gl.get_contract_at(v.licensee).emit_transfer(value=rem_deposit)
 
         else:
             # CLEAN_AUTHORIZED: Claim dismissed
@@ -550,7 +550,7 @@ Respond ONLY with valid JSON without markdown code fences:
 
             # Anti-Harassment: If creator staked a bond and lost, award it to licensee as compensation
             if creator_bond > bigint(0):
-                gl.get_contract_at(v.licensee).emit_transfer(value=u256(creator_bond))
+                gl.get_contract_at(v.licensee).emit_transfer(value=creator_bond)
 
     @gl.public.write
     def reclaim_deposit(self, vault_id: str) -> None:
@@ -582,7 +582,7 @@ Respond ONLY with valid JSON without markdown code fences:
             creator_bond = v.creator_bond
             v.creator_bond = bigint(0)
             if creator_bond > bigint(0):
-                gl.get_contract_at(v.creator).emit_transfer(value=u256(creator_bond))
+                gl.get_contract_at(v.creator).emit_transfer(value=creator_bond)
 
         else:
             raise gl.UserError("Vault deposit is already settled or not yet funded.")
@@ -595,7 +595,7 @@ Respond ONLY with valid JSON without markdown code fences:
         self.total_deposit_locked = self.total_deposit_locked - deposit_val
 
         if deposit_val > bigint(0):
-            gl.get_contract_at(v.licensee).emit_transfer(value=u256(deposit_val))
+            gl.get_contract_at(v.licensee).emit_transfer(value=deposit_val)
 
     # --- Read-only Views ---
 

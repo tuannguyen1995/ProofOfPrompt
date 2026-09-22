@@ -228,12 +228,12 @@ export const App: React.FC = () => {
   }, [fetchContractData]);
 
   /**
-   * Action 1: Register new IP license and lock guarantee deposit
+   * Action 1: Propose new IP license terms (Creator locks 0 deposit; sets required collateral)
    */
   const handleRegisterLicenseSubmit = async (
     licensee: `0x${string}`,
     spec: string,
-    duration: number,
+    durationSeconds: number,
     depositGen: string
   ) => {
     if (!account) {
@@ -245,22 +245,22 @@ export const App: React.FC = () => {
       setActionLoading(true);
       setTxNotice({
         type: 'info',
-        message: 'Waiting for MetaMask signature to lock guarantee deposit on Studionet...',
+        message: 'Waiting for MetaMask signature to publish license proposal (0 GEN deposit)...',
       });
 
-      const depositWei = parseEther(depositGen);
+      const requiredDepositWei = parseEther(depositGen);
 
       const txHash = await sendContractTransaction({
         address: CONTRACT_ADDRESS,
-        functionName: 'register_license',
-        args: [licensee, spec, duration],
+        functionName: 'propose_license',
+        args: [licensee, spec, requiredDepositWei, durationSeconds],
         from: account,
-        value: depositWei,
+        value: 0n,
       });
 
       setTxNotice({
         type: 'info',
-        message: 'Transaction broadcasted to GenLayer. Awaiting GenVM block finalization...',
+        message: 'License offer broadcasted to GenLayer. Awaiting block finalization...',
         txHash,
       });
 
@@ -268,21 +268,120 @@ export const App: React.FC = () => {
 
       setTxNotice({
         type: 'success',
-        message: `License Vault successfully initialized! Escrow collateral of ${depositGen} GEN locked on-chain.`,
+        message: `License proposal published on-chain! Licensee can now accept and fund collateral of ${depositGen} GEN.`,
         txHash,
       });
 
       await fetchContractData();
       if (account) fetchUserBalance(account);
     } catch (err: any) {
-      console.error('License registration failed:', err);
+      console.error('License proposal failed:', err);
       setTxNotice({
         type: 'error',
-        message: err?.message || 'Failed to register license vault.',
+        message: err?.message || 'Failed to propose license.',
       });
       throw err;
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  /**
+   * Action 1b: Licensee accepts license and funds collateral escrow
+   */
+  const handleAcceptAndFund = async (vaultId: string, requiredDepositWei: string) => {
+    if (!account) {
+      await handleConnectWallet();
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      setActiveActionVaultId(vaultId);
+      setTxNotice({
+        type: 'info',
+        message: `Funding escrow collateral for vault ${vaultId}. Confirm in MetaMask...`,
+      });
+
+      const txHash = await sendContractTransaction({
+        address: CONTRACT_ADDRESS,
+        functionName: 'accept_and_fund_license',
+        args: [vaultId],
+        from: account,
+        value: BigInt(requiredDepositWei),
+      });
+
+      setTxNotice({
+        type: 'info',
+        message: 'Acceptance and collateral funding broadcasted. Awaiting GenVM inclusion...',
+        txHash,
+      });
+
+      await waitForTransactionReceipt(txHash);
+
+      setTxNotice({
+        type: 'success',
+        message: `License active! Collateral successfully locked in escrow.`,
+        txHash,
+      });
+
+      await fetchContractData();
+      if (account) fetchUserBalance(account);
+    } catch (err: any) {
+      console.error('Accept & fund failed:', err);
+      setTxNotice({
+        type: 'error',
+        message: err?.message || 'Failed to accept and fund license.',
+      });
+    } finally {
+      setActionLoading(false);
+      setActiveActionVaultId(null);
+    }
+  };
+
+  /**
+   * Action 4b: Either party proposes or accepts an amicable 50/50 compromise split
+   */
+  const handleProposeMutualSplit = async (vaultId: string) => {
+    if (!account) {
+      await handleConnectWallet();
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      setActiveActionVaultId(vaultId);
+      setTxNotice({
+        type: 'info',
+        message: `Submitting 50/50 mutual split compromise for vault ${vaultId}...`,
+      });
+
+      const txHash = await sendContractTransaction({
+        address: CONTRACT_ADDRESS,
+        functionName: 'propose_mutual_split',
+        args: [vaultId],
+        from: account,
+      });
+
+      await waitForTransactionReceipt(txHash);
+
+      setTxNotice({
+        type: 'success',
+        message: `50/50 Compromise submitted on-chain!`,
+        txHash,
+      });
+
+      await fetchContractData();
+      if (account) fetchUserBalance(account);
+    } catch (err: any) {
+      console.error('Mutual split proposal failed:', err);
+      setTxNotice({
+        type: 'error',
+        message: err?.message || 'Failed to propose/confirm mutual split.',
+      });
+    } finally {
+      setActionLoading(false);
+      setActiveActionVaultId(null);
     }
   };
 
@@ -536,7 +635,17 @@ export const App: React.FC = () => {
 
   // Filtered Vaults
   const filteredVaults = vaults.filter((v) => {
-    if (filterStatus !== 'all' && v.status !== filterStatus) return false;
+    if (filterStatus !== 'all') {
+      if (filterStatus === 2) {
+        // 'In Dispute': statuses 2 (dispute filed) and 3 (defense submitted)
+        if (v.status !== 2 && v.status !== 3) return false;
+      } else if (filterStatus === 4) {
+        // 'Settled / Ruled': statuses 4, 5, 6, 7, 8
+        if (v.status < 4) return false;
+      } else if (v.status !== filterStatus) {
+        return false;
+      }
+    }
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
     return (
@@ -699,10 +808,10 @@ export const App: React.FC = () => {
             </div>
 
             {/* Filter Tabs */}
-            <div className="flex items-center bg-card border border-linen-300 rounded-md p-0.5 text-xs">
+            <div className="flex items-center bg-card border border-linen-300 rounded-md p-0.5 text-xs overflow-x-auto">
               <button
                 onClick={() => setFilterStatus('all')}
-                className={`px-2.5 py-1 rounded font-medium transition-colors ${
+                className={`px-2.5 py-1 rounded font-medium transition-colors whitespace-nowrap ${
                   filterStatus === 'all' ? 'bg-ink-900 text-white' : 'text-ink-500 hover:text-ink-900'
                 }`}
               >
@@ -710,27 +819,35 @@ export const App: React.FC = () => {
               </button>
               <button
                 onClick={() => setFilterStatus(0)}
-                className={`px-2.5 py-1 rounded font-medium transition-colors ${
-                  filterStatus === 0 ? 'bg-ultramarine text-white' : 'text-ink-500 hover:text-ink-900'
+                className={`px-2.5 py-1 rounded font-medium transition-colors whitespace-nowrap ${
+                  filterStatus === 0 ? 'bg-amber-600 text-white' : 'text-ink-500 hover:text-ink-900'
                 }`}
               >
-                Active
+                Offers ({vaults.filter(v => v.status === 0).length})
               </button>
               <button
                 onClick={() => setFilterStatus(1)}
-                className={`px-2.5 py-1 rounded font-medium transition-colors ${
-                  filterStatus === 1 ? 'bg-amber text-white' : 'text-ink-500 hover:text-ink-900'
+                className={`px-2.5 py-1 rounded font-medium transition-colors whitespace-nowrap ${
+                  filterStatus === 1 ? 'bg-ultramarine text-white' : 'text-ink-500 hover:text-ink-900'
                 }`}
               >
-                In Audit
+                Active ({vaults.filter(v => v.status === 1).length})
               </button>
               <button
                 onClick={() => setFilterStatus(2)}
-                className={`px-2.5 py-1 rounded font-medium transition-colors ${
-                  filterStatus === 2 ? 'bg-crimson text-white' : 'text-ink-500 hover:text-ink-900'
+                className={`px-2.5 py-1 rounded font-medium transition-colors whitespace-nowrap ${
+                  filterStatus === 2 ? 'bg-amber text-white' : 'text-ink-500 hover:text-ink-900'
                 }`}
               >
-                Infringed
+                Disputes ({vaults.filter(v => v.status === 2 || v.status === 3).length})
+              </button>
+              <button
+                onClick={() => setFilterStatus(4)}
+                className={`px-2.5 py-1 rounded font-medium transition-colors whitespace-nowrap ${
+                  filterStatus === 4 ? 'bg-ink-700 text-white' : 'text-ink-500 hover:text-ink-900'
+                }`}
+              >
+                Settled ({vaults.filter(v => v.status >= 4).length})
               </button>
             </div>
           </div>
@@ -766,6 +883,8 @@ export const App: React.FC = () => {
                 onInspect={(v) => setInspectedVault(v)}
                 onSubmitDefense={(id) => setDefenseTargetVaultId(id)}
                 onConcede={handleConcede}
+                onAcceptAndFund={handleAcceptAndFund}
+                onProposeMutualSplit={handleProposeMutualSplit}
                 isActionLoading={actionLoading}
                 activeActionVaultId={activeActionVaultId}
               />

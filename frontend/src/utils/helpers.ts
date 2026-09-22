@@ -4,19 +4,26 @@ export interface LicenseVault {
   vault_id: string;
   creator: string;
   licensee: string;
+  required_deposit: string;
   escrow_deposit: string;
   creator_bond?: string;
   ip_style_spec: string;
+  duration_seconds: string;
   infringement_url: string;
   defense_url?: string;
   defense_statement?: string;
-  status: number; // 0: ACTIVE, 1: IN_AUDIT, 2: FULL_SLASHED, 3: EXPIRED_REFUNDED, 4: MUTUAL_CONCEDED, 5: PARTIAL_SLASHED
+  status: number; // 0: OFFERED, 1: ACTIVE, 2: DISPUTE_FILED, 3: DEFENSE_SUBMITTED, 4: MUTUAL_CONCEDED, 5: FULL_SLASHED, 6: PARTIAL_SLASHED, 7: CLEAN_AUTHORIZED, 8: EXPIRED_REFUNDED
   verdict: string;
   reason: string;
   confidence: number;
   similarity_score: number;
-  created_at_block: string;
-  expires_at_block: string;
+  created_at: string;
+  activated_at: string;
+  expires_at: string;
+  defense_deadline: string;
+  split_proposer?: string;
+  created_at_block?: string;
+  expires_at_block?: string;
 }
 
 export interface VaultStats {
@@ -26,12 +33,15 @@ export interface VaultStats {
 }
 
 export const VAULT_STATUS_LABELS: Record<number, { label: string; color: string; border: string; bg: string }> = {
-  0: { label: 'Active Licensed', color: 'text-ultramarine', border: 'border-ultramarine/30', bg: 'bg-ultramarine/5' },
-  1: { label: 'Dispute in Audit', color: 'text-amber', border: 'border-amber/30', bg: 'bg-amber/10' },
-  2: { label: 'Full Infringement Slashed', color: 'text-crimson', border: 'border-crimson/30', bg: 'bg-crimson/10' },
-  3: { label: 'Expired / Reclaimed', color: 'text-ink-500', border: 'border-linen-300', bg: 'bg-linen-100' },
-  4: { label: 'Amicably Conceded', color: 'text-indigo-700', border: 'border-indigo-200', bg: 'bg-indigo-50' },
-  5: { label: 'Partial Infringement (50/50 Split)', color: 'text-amber-700', border: 'border-amber-300', bg: 'bg-amber-50' },
+  0: { label: 'Offer Pending Funding', color: 'text-amber-800', border: 'border-amber-300', bg: 'bg-amber-50' },
+  1: { label: 'Active Licensed', color: 'text-ultramarine', border: 'border-ultramarine/30', bg: 'bg-ultramarine/5' },
+  2: { label: 'Dispute Filed (Defense Window Active)', color: 'text-amber-600', border: 'border-amber/30', bg: 'bg-amber/10' },
+  3: { label: 'Defense Submitted (Court Ready)', color: 'text-indigo-600', border: 'border-indigo-200', bg: 'bg-indigo-50' },
+  4: { label: 'Amicably Conceded / Settled', color: 'text-indigo-700', border: 'border-indigo-200', bg: 'bg-indigo-50' },
+  5: { label: 'Full Infringement Slashed', color: 'text-crimson', border: 'border-crimson/30', bg: 'bg-crimson/10' },
+  6: { label: 'Partial Infringement (50/50 Split)', color: 'text-amber-700', border: 'border-amber-300', bg: 'bg-amber-50' },
+  7: { label: 'Clean Authorized (Dismissed)', color: 'text-emerald-700', border: 'border-emerald-300', bg: 'bg-emerald-50' },
+  8: { label: 'Expired / Reclaimed', color: 'text-ink-500', border: 'border-linen-300', bg: 'bg-linen-100' },
 };
 
 /**

@@ -17,7 +17,7 @@ export const DisputeClaim: React.FC<DisputeClaimProps> = ({
   isSubmitting,
 }) => {
   const [url, setUrl] = useState('');
-  const [bond, setBond] = useState('0.05');
+  const [bond, setBond] = useState('0.10');
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen || !vaultId) return null;
@@ -29,6 +29,12 @@ export const DisputeClaim: React.FC<DisputeClaimProps> = ({
     const clean = url.trim();
     if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
       setError('Evidence URL must start with http:// or https://');
+      return;
+    }
+
+    const bondNum = parseFloat(bond);
+    if (isNaN(bondNum) || bondNum < 0.05) {
+      setError('Anti-harassment dispute bond must be at least 0.05 GEN (or 10% of deposit).');
       return;
     }
 
@@ -76,7 +82,7 @@ export const DisputeClaim: React.FC<DisputeClaimProps> = ({
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-ink-700 mb-1.5 flex items-center space-x-1.5">
               <Globe className="w-3.5 h-3.5 text-ink-500" />
-              <span>Public Commercial Evidence URL</span>
+              <span>Public Disputed Work URL</span>
             </label>
             <input
               type="url"
@@ -96,17 +102,18 @@ export const DisputeClaim: React.FC<DisputeClaimProps> = ({
             <label className="block text-xs font-semibold uppercase tracking-wider text-ink-700 mb-1.5 flex items-center justify-between">
               <span className="flex items-center space-x-1.5">
                 <Coins className="w-3.5 h-3.5 text-ink-500" />
-                <span>Anti-Harassment Dispute Bond (GEN)</span>
+                <span>Mandatory Anti-Harassment Dispute Bond (GEN)</span>
               </span>
               <span className="text-[10px] text-emerald-700 font-semibold uppercase tracking-wider">
-                Two-Sided Safety
+                Min 10% Collateral
               </span>
             </label>
             <div className="relative">
               <input
                 type="number"
                 step="0.01"
-                min="0"
+                min="0.05"
+                required
                 value={bond}
                 onChange={(e) => setBond(e.target.value)}
                 className="w-full px-3.5 py-2 text-sm bg-linen-50 border border-linen-300 rounded-md text-ink-900 font-mono focus:outline-none focus:ring-2 focus:ring-crimson focus:bg-white transition-all"
@@ -116,14 +123,14 @@ export const DisputeClaim: React.FC<DisputeClaimProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-ink-500 mt-1">
-              Returned in full if breach is confirmed. Staked to compensate the licensee if the claim is frivolous or clean.
+              100% refunded to you if infringement is upheld. Paid to Licensee as harassment damages if claim is rejected.
             </p>
           </div>
 
-          <div className="bg-linen-100 border border-linen-300 rounded-lg p-3 text-xs text-ink-700 flex items-start space-x-2">
-            <ShieldAlert className="w-4 h-4 text-crimson shrink-0 mt-0.5" />
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900 flex items-start space-x-2">
+            <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <span>
-              Once submitted, the vault locks into <strong>IN_AUDIT</strong> status. The licensee is given opportunity to submit rebuttal proof before the on-chain AI Jury renders a binding verdict.
+              <strong>Enforced 24-Hour Defense Window:</strong> Filing this claim activates a 24-hour defense window during which the Licensee has the protected right to submit counter-evidence before an AI trial can occur.
             </span>
           </div>
 
@@ -141,7 +148,7 @@ export const DisputeClaim: React.FC<DisputeClaimProps> = ({
               disabled={isSubmitting}
               className="px-5 py-2 text-sm font-semibold text-white bg-crimson hover:bg-crimson-hover rounded-md shadow-subtle transition-all disabled:opacity-50"
             >
-              {isSubmitting ? 'Filing Claim on-chain...' : 'Submit Evidence Claim'}
+              {isSubmitting ? 'Filing Claim with Bond...' : 'File Infringement Claim'}
             </button>
           </div>
         </form>

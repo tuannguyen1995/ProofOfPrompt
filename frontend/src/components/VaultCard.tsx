@@ -12,7 +12,9 @@ import {
   Sparkles,
   ShieldCheck,
   Handshake,
-  FileCheck
+  FileCheck,
+  CheckCircle,
+  Clock
 } from 'lucide-react';
 import {
   LicenseVault,
@@ -32,6 +34,8 @@ interface VaultCardProps {
   onInspect: (vault: LicenseVault) => void;
   onSubmitDefense?: (vaultId: string) => void;
   onConcede?: (vaultId: string) => Promise<void>;
+  onAcceptAndFund?: (vaultId: string, requiredDeposit: string) => Promise<void>;
+  onProposeMutualSplit?: (vaultId: string) => Promise<void>;
   isActionLoading: boolean;
   activeActionVaultId: string | null;
 }
@@ -45,6 +49,8 @@ export const VaultCard: React.FC<VaultCardProps> = ({
   onInspect,
   onSubmitDefense,
   onConcede,
+  onAcceptAndFund,
+  onProposeMutualSplit,
   isActionLoading,
   activeActionVaultId,
 }) => {
@@ -52,12 +58,16 @@ export const VaultCard: React.FC<VaultCardProps> = ({
   const statusMeta = VAULT_STATUS_LABELS[vault.status] || VAULT_STATUS_LABELS[0];
   const isThisLoading = isActionLoading && activeActionVaultId === vault.vault_id;
 
-  const isCreator = userAddress && userAddress.toLowerCase() === vault.creator.toLowerCase();
-  const isLicensee = userAddress && userAddress.toLowerCase() === vault.licensee.toLowerCase();
+  const isCreator = !!userAddress && userAddress.toLowerCase() === vault.creator.toLowerCase();
+  const isLicensee = !!userAddress && userAddress.toLowerCase() === vault.licensee.toLowerCase();
 
   const simColor = getSimilarityScoreColor(vault.similarity_score);
   const hasDefense = !!vault.defense_statement || !!vault.defense_url;
   const hasCreatorBond = vault.creator_bond && BigInt(vault.creator_bond) > 0n;
+
+  // Split proposal info
+  const hasSplitProposer = vault.split_proposer && vault.split_proposer !== '0x0000000000000000000000000000000000000000';
+  const isMeSplitProposer = hasSplitProposer && userAddress && userAddress.toLowerCase() === vault.split_proposer?.toLowerCase();
 
   return (
     <div className="bg-card border border-linen-300 rounded-xl p-6 shadow-subtle hover:shadow-gallery transition-all flex flex-col justify-between">
@@ -70,10 +80,10 @@ export const VaultCard: React.FC<VaultCardProps> = ({
             </div>
             <div>
               <span className="font-display font-bold text-base text-ink-900">
-                License Escrow Vault
+                AI License Escrow
               </span>
               <div className="flex items-center space-x-1.5 text-[11px] text-ink-500 font-mono">
-                <span>Blocks: {vault.created_at_block} &rarr; {vault.expires_at_block}</span>
+                <span>Created: {vault.created_at ? new Date(Number(vault.created_at) * 1000).toLocaleDateString() : 'N/A'}</span>
               </div>
             </div>
           </div>
@@ -89,11 +99,11 @@ export const VaultCard: React.FC<VaultCardProps> = ({
         <div className="grid grid-cols-2 gap-3 p-3 bg-linen-50 border border-linen-300 rounded-lg mb-4">
           <div>
             <span className="text-[10px] font-mono text-ink-500 uppercase tracking-wider block">
-              Guarantee Escrow
+              {vault.status === 0 ? 'Required Collateral' : 'Guarantee Escrow'}
             </span>
             <span className="font-mono font-bold text-lg text-ink-900 flex items-center space-x-1">
               <Coins className="w-4 h-4 text-ultramarine inline mr-1" />
-              {formatGen(vault.escrow_deposit)}
+              {vault.status === 0 ? formatGen(vault.required_deposit) : formatGen(vault.escrow_deposit)}
             </span>
             {hasCreatorBond && (
               <span className="text-[10px] text-emerald-700 font-mono block mt-0.5">
@@ -110,7 +120,7 @@ export const VaultCard: React.FC<VaultCardProps> = ({
               <span className={`text-sm font-mono font-bold px-2 py-0.5 rounded border ${simColor.bg} ${simColor.text} ${simColor.border}`}>
                 {vault.similarity_score}%
               </span>
-              {vault.verdict !== 'PENDING' && (
+              {vault.verdict && vault.verdict !== 'PENDING' && (
                 <span className="text-[10px] font-mono uppercase text-ink-500 truncate max-w-[100px]" title={vault.verdict}>
                   {vault.verdict.replace('_', ' ')}
                 </span>
@@ -170,7 +180,7 @@ export const VaultCard: React.FC<VaultCardProps> = ({
           </div>
         </div>
 
-        {/* Infringement claim box if in audit */}
+        {/* Infringement claim box if under dispute */}
         {vault.infringement_url && (
           <div className="mb-3 p-2.5 bg-crimson-light/40 border border-crimson-border rounded-lg text-xs">
             <span className="font-semibold text-crimson block mb-0.5">Creator Claim Evidence:</span>
@@ -209,17 +219,56 @@ export const VaultCard: React.FC<VaultCardProps> = ({
             )}
           </div>
         )}
+
+        {/* Mutual compromise note if pending */}
+        {hasSplitProposer && (vault.status === 2 || vault.status === 3) && (
+          <div className="mb-3 p-2.5 bg-indigo-50 border border-indigo-200 rounded-lg text-xs">
+            <span className="font-semibold text-indigo-900 flex items-center space-x-1 mb-0.5">
+              <Handshake className="w-3.5 h-3.5 text-indigo-600" />
+              <span>50/50 Compromise Proposed:</span>
+            </span>
+            <p className="text-[11px] text-indigo-800">
+              {isMeSplitProposer
+                ? 'You proposed an amicable 50/50 split. Awaiting counterparty confirmation.'
+                : 'Counterparty proposed an amicable 50/50 split! Accept below to settle without trial.'}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Action Footer */}
       <div className="pt-4 border-t border-linen-300 space-y-2">
-        {/* State 0: Active */}
+        {/* Status 0: OFFERED (Awaiting Licensee Acceptance & Escrow Collateral) */}
         {vault.status === 0 && (
+          <div className="space-y-2">
+            {isLicensee && onAcceptAndFund ? (
+              <button
+                onClick={() => onAcceptAndFund(vault.vault_id, vault.required_deposit)}
+                disabled={isActionLoading}
+                className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-md shadow-subtle transition-all"
+              >
+                <CheckCircle className="w-4 h-4" />
+                <span>Accept Terms & Fund Collateral ({formatGen(vault.required_deposit)})</span>
+              </button>
+            ) : isCreator ? (
+              <div className="text-[11px] text-amber-800 font-sans text-center bg-amber-50 rounded border border-amber-200 py-2 px-2.5">
+                License terms published. Awaiting acceptance & collateral funding from Licensee (<span className="font-mono">{shortenAddress(vault.licensee, 3)}</span>).
+              </div>
+            ) : (
+              <div className="text-[11px] text-ink-500 font-sans text-center bg-linen-50 rounded border border-linen-200 py-2 px-2.5">
+                Offer awaiting acceptance by Licensee (<span className="font-mono">{shortenAddress(vault.licensee, 3)}</span>)
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Status 1: ACTIVE (Licensee Accepted & Funded) */}
+        {vault.status === 1 && (
           <div className="flex space-x-2">
             <button
               onClick={() => onFileDispute(vault.vault_id)}
               disabled={isActionLoading || (!isCreator && !!userAddress)}
-              title={isCreator ? 'File infringement dispute as IP Creator' : 'Only the registered IP Creator can file a dispute'}
+              title={isCreator ? 'File copyright infringement claim as IP Creator' : 'Only the registered IP Creator can file a dispute'}
               className="flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 text-xs font-semibold text-crimson bg-crimson-light hover:bg-crimson/15 border border-crimson-border rounded-md transition-colors disabled:opacity-40"
             >
               <AlertOctagon className="w-3.5 h-3.5" />
@@ -228,7 +277,7 @@ export const VaultCard: React.FC<VaultCardProps> = ({
             <button
               onClick={() => onReclaim(vault.vault_id)}
               disabled={isActionLoading || (!isLicensee && !!userAddress)}
-              title={isLicensee ? 'Licensee can reclaim guarantee deposit once term expiration is reached' : 'Only the registered Licensee can reclaim deposit'}
+              title={isLicensee ? 'Licensee can reclaim guarantee deposit once license term expires' : 'Only the registered Licensee can reclaim deposit'}
               className="flex items-center justify-center space-x-1 py-2 px-3 text-xs font-medium text-ink-700 bg-linen-100 hover:bg-linen-200 border border-linen-300 rounded-md transition-colors disabled:opacity-40"
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -237,11 +286,19 @@ export const VaultCard: React.FC<VaultCardProps> = ({
           </div>
         )}
 
-        {/* State 1: Dispute in Audit */}
-        {vault.status === 1 && (
+        {/* Status 2: DISPUTE_FILED (Defense Window Active) */}
+        {vault.status === 2 && (
           <div className="space-y-2">
-            {/* Licensee Defense options */}
-            {isLicensee && !hasDefense && onSubmitDefense ? (
+            <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded p-2 text-xs text-amber-900">
+              <span className="flex items-center space-x-1 font-semibold">
+                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                <span>Defense Window Active (24h)</span>
+              </span>
+              <span className="text-[10px] font-mono text-amber-700">Protected Period</span>
+            </div>
+
+            {/* Licensee Defense Action */}
+            {isLicensee && onSubmitDefense && (
               <button
                 onClick={() => onSubmitDefense(vault.vault_id)}
                 disabled={isActionLoading}
@@ -250,13 +307,47 @@ export const VaultCard: React.FC<VaultCardProps> = ({
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Submit Right of Defense (Licensee Action)</span>
               </button>
-            ) : !hasDefense ? (
-              <div className="text-[11px] text-ink-500 font-sans text-center bg-linen-50 rounded border border-linen-200 py-1.5 px-2.5">
-                Right of defense reserved for Licensee (<span className="font-mono">{shortenAddress(vault.licensee, 3)}</span>)
-              </div>
-            ) : null}
+            )}
 
-            {/* AI Jury Adjudication - Open to parties, validators, or observers */}
+            {/* 50/50 Mutual Compromise Split Proposal */}
+            {(isCreator || isLicensee) && onProposeMutualSplit && (
+              <button
+                onClick={() => onProposeMutualSplit(vault.vault_id)}
+                disabled={isActionLoading || !!isMeSplitProposer}
+                className="w-full flex items-center justify-center space-x-1.5 py-1.5 px-2 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded transition-colors disabled:opacity-50"
+              >
+                <Handshake className="w-3.5 h-3.5 text-indigo-600" />
+                <span>{hasSplitProposer && !isMeSplitProposer ? 'Confirm 50/50 Compromise Settlement' : 'Propose 50/50 Amicable Split'}</span>
+              </button>
+            )}
+
+            {/* AI Jury Trigger (Disabled while defense window active without defense) */}
+            <button
+              disabled
+              title="Adjudication is locked during the 24-hour defense window to protect licensee rights of rebuttal."
+              className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 text-xs font-bold text-ink-400 bg-linen-100 border border-linen-300 rounded-md cursor-not-allowed"
+            >
+              <Scale className="w-4 h-4 text-ink-400" />
+              <span>Jury Locked (Awaiting Defense or 24h Expiry)</span>
+            </button>
+
+            {/* Licensee Voluntary Concession */}
+            {isLicensee && onConcede && (
+              <button
+                onClick={() => onConcede(vault.vault_id)}
+                disabled={isActionLoading}
+                className="w-full flex items-center justify-center space-x-1 py-1.5 px-2 text-[11px] text-ink-600 hover:text-ink-900 bg-linen-50 border border-linen-200 rounded transition-colors"
+              >
+                <span>Amicably Concede Claim (Transfer Deposit to Creator)</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Status 3: DEFENSE_SUBMITTED (Defense Provided -> AI Trial Unlocked) */}
+        {vault.status === 3 && (
+          <div className="space-y-2">
+            {/* AI Jury Adjudication Button */}
             <button
               onClick={() => onAdjudicate(vault.vault_id)}
               disabled={isActionLoading}
@@ -264,19 +355,30 @@ export const VaultCard: React.FC<VaultCardProps> = ({
             >
               <Scale className={`w-4 h-4 ${isThisLoading ? 'animate-spin' : ''}`} />
               <span>
-                {isThisLoading ? 'AI Jury Auditing Evidence...' : 'Trigger AI Jury Adjudication (Court)'}
+                {isThisLoading ? 'AI Jury Auditing Two-Sided Proofs...' : 'Trigger AI Jury Adjudication (Court)'}
               </span>
             </button>
 
-            {/* Optional Amicable Concede */}
+            {/* 50/50 Mutual Compromise Split Proposal */}
+            {(isCreator || isLicensee) && onProposeMutualSplit && (
+              <button
+                onClick={() => onProposeMutualSplit(vault.vault_id)}
+                disabled={isActionLoading || !!isMeSplitProposer}
+                className="w-full flex items-center justify-center space-x-1.5 py-1.5 px-2 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded transition-colors disabled:opacity-50"
+              >
+                <Handshake className="w-3.5 h-3.5 text-indigo-600" />
+                <span>{hasSplitProposer && !isMeSplitProposer ? 'Confirm 50/50 Compromise Settlement' : 'Propose 50/50 Amicable Split'}</span>
+              </button>
+            )}
+
+            {/* Licensee Voluntary Concession */}
             {isLicensee && onConcede && (
               <button
                 onClick={() => onConcede(vault.vault_id)}
                 disabled={isActionLoading}
                 className="w-full flex items-center justify-center space-x-1 py-1.5 px-2 text-[11px] text-ink-600 hover:text-ink-900 bg-linen-50 border border-linen-200 rounded transition-colors"
               >
-                <Handshake className="w-3 h-3 text-ink-500" />
-                <span>Amicably Concede Claim (Licensee Settle)</span>
+                <span>Amicably Concede Claim</span>
               </button>
             )}
 
@@ -286,8 +388,8 @@ export const VaultCard: React.FC<VaultCardProps> = ({
           </div>
         )}
 
-        {/* State 2, 4, 5: Adjudicated / Settled */}
-        {(vault.status === 2 || vault.status === 4 || vault.status === 5) && (
+        {/* Status 4, 5, 6, 7: Adjudicated / Settled */}
+        {(vault.status === 4 || vault.status === 5 || vault.status === 6 || vault.status === 7) && (
           <div className="flex space-x-2">
             <button
               onClick={() => onInspect(vault)}
@@ -299,8 +401,8 @@ export const VaultCard: React.FC<VaultCardProps> = ({
           </div>
         )}
 
-        {/* State 3: Expired / Reclaimed */}
-        {vault.status === 3 && (
+        {/* Status 8: Expired / Reclaimed */}
+        {vault.status === 8 && (
           <button
             onClick={() => onInspect(vault)}
             className="w-full flex items-center justify-center space-x-1.5 py-2 px-3 text-xs font-medium text-ink-600 bg-linen-50 border border-linen-200 rounded-md"

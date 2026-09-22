@@ -2,6 +2,7 @@
 from genlayer import *
 from dataclasses import dataclass
 import json
+import datetime
 
 
 def _addr_str(addr: Address) -> str:
@@ -12,6 +13,24 @@ def _addr_str(addr: Address) -> str:
         return str(addr)
 
 
+# --- Protocol Status Lifecycle ---
+STATUS_OFFERED = u8(0)           # Creator proposed terms, awaiting Licensee collateral funding
+STATUS_ACTIVE = u8(1)            # Licensee accepted and funded collateral deposit
+STATUS_DISPUTE_FILED = u8(2)     # Creator filed claim with mandatory bond; defense window active
+STATUS_DEFENSE_SUBMITTED = u8(3) # Licensee submitted counter-evidence; ready for AI court trial
+STATUS_MUTUAL_CONCEDED = u8(4)   # Amicably conceded or mutually settled without trial
+STATUS_FULL_SLASHED = u8(5)      # AI Jury ruled FULL_INFRINGEMENT (100% slash to creator)
+STATUS_PARTIAL_SLASHED = u8(6)   # AI Jury ruled PARTIAL_INFRINGEMENT (50/50 fair split)
+STATUS_CLEAN_AUTHORIZED = u8(7)  # AI Jury dismissed claim (creator bond paid to licensee)
+STATUS_EXPIRED_REFUNDED = u8(8)  # Clean term completion, deposit reclaimed by licensee
+
+# --- Default Safeguard Windows (in seconds) ---
+DEFENSE_WINDOW_SECONDS = 86400      # 24 hours defense window
+STALL_TIMEOUT_SECONDS = 86400 * 3   # 3 days timeout if audit stalls
+MIN_CLAIM_BOND_BPS = 1000           # 10% (1000 bps) minimum dispute bond required
+MIN_ABSOLUTE_BOND = 50_000_000_000_000_000  # 0.05 GEN minimum floor
+
+
 @allow_storage
 @dataclass
 class LicenseVault:
@@ -19,27 +38,36 @@ class LicenseVault:
     vault_id: str
     creator: Address
     licensee: Address
-    escrow_deposit: bigint         # Infringement guarantee stake locked by licensee
-    creator_bond: bigint           # Anti-harassment dispute stake locked by creator
+    required_deposit: bigint       # Collateral amount required from licensee
+    escrow_deposit: bigint         # Collateral actually funded by licensee
+    creator_bond: bigint           # Mandatory anti-harassment dispute stake locked by creator
     ip_style_spec: str             # Prompt DNA, unique style elements, and canary markers
+    duration_seconds: bigint       # Licensed duration in seconds
     infringement_url: str          # Live URL of disputed unauthorized output
     defense_url: str               # Counter-evidence submitted by licensee
     defense_statement: str         # Licensee rebuttal / fair-use explanation
-    status: u8                     # 0: ACTIVE, 1: IN_AUDIT, 2: FULL_SLASHED, 3: EXPIRED_REFUNDED, 4: MUTUAL_CONCEDED, 5: PARTIAL_SLASHED
+    status: u8                     # STATUS_*
     verdict: str                   # "PENDING", "FULL_INFRINGEMENT", "PARTIAL_INFRINGEMENT", "CLEAN_AUTHORIZED", "MUTUAL_CONCEDED"
     reason: str                    # Detailed qualitative jury rationale
     confidence: u8                 # 0 - 100: Validator consensus confidence
     similarity_score: u8           # 0 - 100: Style DNA overlap and infringement strength
-    created_at_block: u256
-    expires_at_block: u256         # Block counter when licensee can reclaim deposit
-    audit_started_block: u256      # Block when dispute was filed
+    created_at: bigint             # Timestamp when offer was published
+    activated_at: bigint           # Timestamp when licensee funded collateral
+    expires_at: bigint             # Timestamp when license expires
+    defense_deadline: bigint       # Timestamp when licensee defense window closes
+    split_proposer: Address        # Address of party who initiated mutual 50/50 compromise proposal
 
 
 class Contract(gl.Contract):
     """
-    ProofOfPrompt: Autonomous AI IP Licensing & Copyright Infringement Court
+    ProofOfPrompt: Autonomous Two-Sided AI IP Licensing & Copyright Infringement Court
     Target Network: studionet (Chain ID: 61999)
-    Two-Sided Justice Edition: Anti-Harassment Bonds & Licensee Rebuttal Rights
+    Two-Sided Justice Edition:
+      1. Separate Licensee Acceptance & Collateral Funding Step
+      2. Mandatory Creator Anti-Harassment Dispute Bond
+      3. Enforced Defense Window (No Immediate Adjudication)
+      4. Authoritative Chain Time via gl.message_raw['datetime']
+      5. Fair 50/50 Graduated Rulings & Mutual Compromise Options
     """
     vaults: TreeMap[str, LicenseVault]
     vault_ids: DynArray[str]
@@ -53,56 +81,124 @@ class Contract(gl.Contract):
         self.total_disputes_resolved = u32(0)
         self.vault_counter = u64(0)
 
-    @gl.public.write.payable
-    def register_license(self, licensee_addr: Address, ip_style_spec: str, duration_blocks: int) -> str:
+    def _now(self) -> bigint:
+        """Derive trusted deterministic execution timestamp strictly from runtime context."""
+        try:
+            dt_raw = gl.message_raw.get("datetime", None) if isinstance(gl.message_raw, dict) else None
+            if dt_raw:
+                s = str(dt_raw)
+                if s.endswith("Z"):
+                    s = s[:-1] + "+00:00"
+                ts = int(datetime.datetime.fromisoformat(s).timestamp())
+                if ts > 0:
+                    return bigint(ts)
+        except Exception:
+            pass
+        return bigint(0)
+
+    @gl.public.write
+    def propose_license(
+        self,
+        licensee_addr: Address,
+        ip_style_spec: str,
+        required_deposit: bigint,
+        duration_seconds: int = 2592000
+    ) -> str:
         """
-        Licensing Vault is initialized by locking an infringement guarantee deposit in GEN.
+        Step 1 (Two-Sided Escrow): Creator publishes license terms specifying prompt style DNA,
+        duration, and required guarantee deposit collateral.
+        Creator DOES NOT fund the licensee's collateral.
         """
-        deposit = bigint(gl.message.value)
-        if deposit <= bigint(0):
-            raise gl.UserError("Guarantee escrow deposit must be greater than 0 GEN.")
+        if required_deposit <= bigint(0):
+            raise gl.UserError("Required guarantee deposit must be greater than 0.")
 
         if not ip_style_spec or len(ip_style_spec.strip()) == 0:
             raise gl.UserError("IP Style DNA and prompt specification cannot be empty.")
 
-        duration = u256(duration_blocks if duration_blocks > 0 else 5000)
+        duration = bigint(duration_seconds if duration_seconds > 0 else 2592000)  # Default 30 days
 
         self.vault_counter = self.vault_counter + u64(1)
         vault_id = f"ip-{int(self.vault_counter)}"
-        current_block = u256(int(self.vault_counter))
-        expires_at = current_block + duration
+        now = self._now()
 
         new_vault = LicenseVault(
             vault_id=vault_id,
             creator=gl.message.sender_address,
             licensee=licensee_addr,
-            escrow_deposit=deposit,
+            required_deposit=required_deposit,
+            escrow_deposit=bigint(0),
             creator_bond=bigint(0),
             ip_style_spec=ip_style_spec.strip(),
+            duration_seconds=duration,
             infringement_url="",
             defense_url="",
             defense_statement="",
-            status=u8(0),  # ACTIVE_LICENSED
-            verdict="PENDING",
-            reason="License active. Awaiting infringement claim or term expiration.",
+            status=STATUS_OFFERED,  # 0: Awaiting Licensee Acceptance & Funding
+            verdict="AWAITING_LICENSEE_FUNDING",
+            reason="License terms published by creator. Awaiting licensee acceptance and escrow funding.",
             confidence=u8(0),
             similarity_score=u8(0),
-            created_at_block=current_block,
-            expires_at_block=expires_at,
-            audit_started_block=u256(0),
+            created_at=now,
+            activated_at=bigint(0),
+            expires_at=bigint(0),
+            defense_deadline=bigint(0),
+            split_proposer=Address("0x0000000000000000000000000000000000000000"),
         )
 
         self.vaults[vault_id] = new_vault
         self.vault_ids.append(vault_id)
-        self.total_deposit_locked = self.total_deposit_locked + deposit
-
         return vault_id
+
+    @gl.public.write.payable
+    def register_license(
+        self,
+        licensee_addr: Address,
+        ip_style_spec: str,
+        duration_seconds: int = 2592000
+    ) -> str:
+        """
+        Convenience wrapper: Creates a license proposal with required_deposit = msg.value
+        (if msg.value > 0) or default 1 GEN.
+        """
+        req_dep = bigint(gl.message.value) if gl.message.value > 0 else bigint(1_000_000_000_000_000_000)
+        return self.propose_license(licensee_addr, ip_style_spec, req_dep, duration_seconds)
+
+    @gl.public.write.payable
+    def accept_and_fund_license(self, vault_id: str) -> None:
+        """
+        Step 2 (Two-Sided Escrow): Designated licensee explicitly accepts the license terms
+        and funds their own guarantee collateral deposit in GEN.
+        """
+        if vault_id not in self.vaults:
+            raise gl.UserError(f"Vault {vault_id} does not exist.")
+
+        v = self.vaults[vault_id]
+        if gl.message.sender_address != v.licensee:
+            raise gl.UserError("Only the designated licensee can accept and fund this license.")
+
+        if v.status != STATUS_OFFERED:
+            raise gl.UserError(f"Vault {vault_id} is not in pending offer status.")
+
+        funded = bigint(gl.message.value)
+        if funded < v.required_deposit:
+            raise gl.UserError(f"Insufficient deposit. Required: {v.required_deposit} wei, sent: {funded} wei.")
+
+        now = self._now()
+        v.escrow_deposit = funded
+        v.status = STATUS_ACTIVE  # 1: ACTIVE_LICENSED
+        v.activated_at = now
+        v.expires_at = now + v.duration_seconds
+        v.verdict = "PENDING"
+        v.reason = "License active and funded. Licensee granted commercial authorization."
+
+        self.total_deposit_locked = self.total_deposit_locked + funded
 
     @gl.public.write.payable
     def file_infringement_claim(self, vault_id: str, evidence_url: str) -> None:
         """
-        Creator files an infringement claim with public proof URL of unauthorized deployment.
-        Optional creator dispute bond attached to discourage frivolous claims.
+        Creator files an infringement dispute with public proof URL of unauthorized deployment.
+        Enforces MANDATORY anti-harassment dispute bond (at least 10% of deposit)
+        and initiates the defense window clock.
         """
         if vault_id not in self.vaults:
             raise gl.UserError(f"Vault {vault_id} does not exist.")
@@ -111,27 +207,37 @@ class Contract(gl.Contract):
         if gl.message.sender_address != v.creator:
             raise gl.UserError("Only the IP creator can file an infringement dispute.")
 
-        if v.status != u8(0):
+        if v.status != STATUS_ACTIVE:
             raise gl.UserError(f"Vault {vault_id} is not in active licensed status.")
+
+        # Mandatory Anti-Harassment Claim Bond Enforcement
+        bond = bigint(gl.message.value)
+        min_bond = (v.escrow_deposit * bigint(MIN_CLAIM_BOND_BPS)) // bigint(10000)
+        floor_bond = bigint(MIN_ABSOLUTE_BOND)
+        required_bond = min_bond if min_bond > floor_bond else floor_bond
+
+        if bond < required_bond:
+            raise gl.UserError(
+                f"Anti-harassment dispute bond of at least {required_bond} wei required to file claim."
+            )
 
         clean_url = evidence_url.strip()
         if not clean_url.startswith("http://") and not clean_url.startswith("https://"):
             raise gl.UserError("Valid public evidence URL (http/https) is required.")
 
-        bond = bigint(gl.message.value)
-        self.vault_counter = self.vault_counter + u64(1)
-
-        v.creator_bond = bond
+        now = self._now()
+        v.status = STATUS_DISPUTE_FILED  # 2: DISPUTE_FILED (Defense Window Active)
         v.infringement_url = clean_url
-        v.status = u8(1)  # IN_AUDIT
-        v.audit_started_block = u256(int(self.vault_counter))
-        v.reason = "Infringement claim filed. Awaiting licensee defense or AI jury adjudication."
+        v.creator_bond = bond
+        v.defense_deadline = now + bigint(DEFENSE_WINDOW_SECONDS)
+        v.verdict = "IN_DISPUTE"
+        v.reason = "Infringement claim filed with anti-harassment bond. Defense window is active for Licensee rebuttal."
 
     @gl.public.write
     def submit_licensee_defense(self, vault_id: str, defense_url: str, defense_statement: str) -> None:
         """
-        Two-Sided Justice: Licensee exercises their right of defense to provide counter-evidence
-        (e.g., license authorization tokens, proof of independent creation, or fair-use context).
+        Licensee exercises their right of defense within the active defense window.
+        Submits rebuttal statement and counter-evidence URL prior to AI trial.
         """
         if vault_id not in self.vaults:
             raise gl.UserError(f"Vault {vault_id} does not exist.")
@@ -140,8 +246,12 @@ class Contract(gl.Contract):
         if gl.message.sender_address != v.licensee:
             raise gl.UserError("Only the authorized licensee can submit a defense.")
 
-        if v.status != u8(1):
-            raise gl.UserError(f"Vault {vault_id} is not undergoing active infringement audit.")
+        if v.status != STATUS_DISPUTE_FILED:
+            raise gl.UserError(f"Vault {vault_id} is not awaiting licensee defense.")
+
+        now = self._now()
+        if v.defense_deadline > bigint(0) and now > v.defense_deadline:
+            raise gl.UserError("Licensee defense window has expired.")
 
         clean_url = defense_url.strip()
         if clean_url and not clean_url.startswith("http://") and not clean_url.startswith("https://"):
@@ -149,7 +259,8 @@ class Contract(gl.Contract):
 
         v.defense_url = clean_url
         v.defense_statement = defense_statement.strip()
-        v.reason = "Licensee submitted defense evidence. AI Jury evaluating both sides."
+        v.status = STATUS_DEFENSE_SUBMITTED  # 3: DEFENSE_SUBMITTED (Ready for AI trial)
+        v.reason = "Licensee submitted rebuttal evidence. Case is ready for AI Jury trial."
 
     @gl.public.write
     def concede_claim(self, vault_id: str) -> None:
@@ -164,10 +275,10 @@ class Contract(gl.Contract):
         if gl.message.sender_address != v.licensee:
             raise gl.UserError("Only the licensee can concede the claim.")
 
-        if v.status != u8(1):
-            raise gl.UserError("Can only concede while vault is under audit.")
+        if v.status != STATUS_DISPUTE_FILED and v.status != STATUS_DEFENSE_SUBMITTED:
+            raise gl.UserError("Can only concede while vault is under active dispute.")
 
-        v.status = u8(4)  # MUTUAL_CONCEDED
+        v.status = STATUS_MUTUAL_CONCEDED  # 4: MUTUAL_CONCEDED
         v.verdict = "MUTUAL_CONCEDED"
         v.reason = "Licensee amicably conceded the copyright claim without requiring AI jury trial."
 
@@ -183,6 +294,63 @@ class Contract(gl.Contract):
             gl.get_contract_at(v.creator).emit_transfer(value=u256(total_payout))
 
     @gl.public.write
+    def propose_mutual_split(self, vault_id: str) -> None:
+        """
+        Two-Sided Compromise Mechanism: Either Creator or Licensee can propose an amicable
+        50/50 split of the deposit. If both parties agree, the dispute settles with zero trial cost:
+        - 50% deposit to Creator (compensatory damages)
+        - 50% deposit refunded to Licensee
+        - 100% creator bond refunded to Creator
+        """
+        if vault_id not in self.vaults:
+            raise gl.UserError(f"Vault {vault_id} does not exist.")
+
+        v = self.vaults[vault_id]
+        sender = gl.message.sender_address
+        if sender != v.creator and sender != v.licensee:
+            raise gl.UserError("Only the creator or licensee can participate in mutual split compromise.")
+
+        if v.status != STATUS_DISPUTE_FILED and v.status != STATUS_DEFENSE_SUBMITTED:
+            raise gl.UserError("Mutual split compromise is only available during active dispute.")
+
+        empty_addr = Address("0x0000000000000000000000000000000000000000")
+
+        if v.split_proposer == empty_addr:
+            # First party proposed
+            v.split_proposer = sender
+            role = "Creator" if sender == v.creator else "Licensee"
+            other_role = "Licensee" if sender == v.creator else "Creator"
+            v.reason = f"{role} proposed an amicable 50/50 compromise split. Awaiting {other_role} confirmation."
+            return
+
+        if v.split_proposer == sender:
+            raise gl.UserError("You have already proposed a mutual split. Awaiting the counterparty.")
+
+        # Counterparty accepted! Settle immediately
+        v.status = STATUS_MUTUAL_CONCEDED
+        v.verdict = "MUTUAL_SPLIT_AGREED"
+        v.reason = "Both parties mutually agreed to an amicable 50/50 compromise settlement."
+
+        deposit_val = v.escrow_deposit
+        creator_bond = v.creator_bond
+        v.creator_bond = bigint(0)
+
+        self.total_deposit_locked = self.total_deposit_locked - deposit_val
+        self.total_disputes_resolved = self.total_disputes_resolved + u32(1)
+
+        half_deposit = deposit_val // bigint(2)
+        rem_deposit = deposit_val - half_deposit
+
+        # Creator receives 50% deposit + 100% of their dispute bond
+        creator_total = half_deposit + creator_bond
+        if creator_total > bigint(0):
+            gl.get_contract_at(v.creator).emit_transfer(value=u256(creator_total))
+
+        # Licensee receives remaining 50% deposit
+        if rem_deposit > bigint(0):
+            gl.get_contract_at(v.licensee).emit_transfer(value=u256(rem_deposit))
+
+    @gl.public.write
     def adjudicate_infringement(self, vault_id: str) -> None:
         """
         AI Jury fetches evidence live on-chain via gl.nondet.web.render, evaluates both
@@ -190,13 +358,24 @@ class Contract(gl.Contract):
         - FULL_INFRINGEMENT (similarity >= 75%)
         - PARTIAL_INFRINGEMENT (similarity 50-74%)
         - CLEAN_AUTHORIZED (similarity < 50%)
+
+        ENFORCES DEFENSE WINDOW: Cannot be called during an open defense window unless
+        licensee has already submitted defense!
         """
         if vault_id not in self.vaults:
             raise gl.UserError(f"Vault {vault_id} does not exist.")
 
         v = self.vaults[vault_id]
-        if v.status != u8(1):
+        if v.status != STATUS_DISPUTE_FILED and v.status != STATUS_DEFENSE_SUBMITTED:
             raise gl.UserError(f"Vault {vault_id} is not awaiting infringement adjudication.")
+
+        # STRICT DEFENSE WINDOW SAFEGUARD
+        now = self._now()
+        if v.status == STATUS_DISPUTE_FILED:
+            if v.defense_deadline > bigint(0) and now <= v.defense_deadline:
+                raise gl.UserError(
+                    "Cannot adjudicate yet: Licensee defense window is active. Must await defense submission or deadline expiry."
+                )
 
         evidence_url = v.infringement_url
         defense_url = v.defense_url
@@ -242,7 +421,7 @@ CLAIM EVIDENCE OF DISPUTED COMMERCIAL WORK (BY CREATOR):
 {truncated_evidence}
 
 LICENSEE COUNTER-EVIDENCE & REBUTTAL STATEMENT (BY LICENSEE):
-Rebuttal statement: {defense_stmt if defense_stmt else "None submitted"}
+Rebuttal statement: {defense_stmt if defense_stmt else "None submitted (defense window expired or defaulted)"}
 Rebuttal web evidence: {truncated_defense if truncated_defense else "None submitted"}
 
 EVALUATION RUBRIC:
@@ -251,7 +430,7 @@ EVALUATION RUBRIC:
 3. Proportional 3-Tier Verdict:
    - "FULL_INFRINGEMENT" (similarity_score >= 75): Blatant unauthorized replication or direct theft of protected prompt DNA.
    - "PARTIAL_INFRINGEMENT" (similarity_score between 50 and 74): Significant stylistic borrowing or borderline derivative work without full prompt cloning.
-   - "CLEAN_AUTHORIZED" (similarity_score < 50): Independent creation, coincidence, or permitted fair use.
+   - "CLEAN_AUTHORIZED" (similarity_score < 50): Independent creation, coincidence, permitted fair use, or unsubstantiated claim.
 
 Respond ONLY with valid JSON without markdown code fences:
 {{
@@ -280,18 +459,15 @@ Respond ONLY with valid JSON without markdown code fences:
                 except Exception:
                     pass
 
-            if not parsed or "verdict" not in parsed:
+            if not isinstance(parsed, dict):
                 return {
                     "verdict": "CLEAN_AUTHORIZED",
-                    "confidence": 50,
-                    "similarity_score": 0,
-                    "reason": "Consensus failed to parse validator output."
+                    "confidence": 70,
+                    "similarity_score": 10,
+                    "reason": "AI jury returned unparseable verdict; defaulted to non-infringement to protect licensee deposit."
                 }
 
-            verdict_str = str(parsed.get("verdict", "")).strip().upper()
-            # Normalize legacy INFRINGEMENT_CONFIRMED to FULL_INFRINGEMENT
-            if verdict_str == "INFRINGEMENT_CONFIRMED":
-                verdict_str = "FULL_INFRINGEMENT"
+            verdict_str = str(parsed.get("verdict", "CLEAN_AUTHORIZED")).upper().strip()
             if verdict_str not in ("FULL_INFRINGEMENT", "PARTIAL_INFRINGEMENT", "CLEAN_AUTHORIZED"):
                 verdict_str = "CLEAN_AUTHORIZED"
 
@@ -346,14 +522,14 @@ Respond ONLY with valid JSON without markdown code fences:
         v.creator_bond = bigint(0)  # Always clear bond on settlement
 
         if verdict == "FULL_INFRINGEMENT":
-            v.status = u8(2)  # FULL_SLASHED
+            v.status = STATUS_FULL_SLASHED  # 5: FULL_SLASHED
             self.total_deposit_locked = self.total_deposit_locked - deposit_val
             self.total_disputes_resolved = self.total_disputes_resolved + u32(1)
             # Full slash: 100% deposit + returned creator bond paid to Creator
             gl.get_contract_at(v.creator).emit_transfer(value=u256(deposit_val + creator_bond))
 
         elif verdict == "PARTIAL_INFRINGEMENT":
-            v.status = u8(5)  # PARTIAL_SLASHED
+            v.status = STATUS_PARTIAL_SLASHED  # 6: PARTIAL_SLASHED
             self.total_deposit_locked = self.total_deposit_locked - deposit_val
             self.total_disputes_resolved = self.total_disputes_resolved + u32(1)
 
@@ -369,18 +545,18 @@ Respond ONLY with valid JSON without markdown code fences:
 
         else:
             # CLEAN_AUTHORIZED: Claim dismissed
-            v.status = u8(0)  # Reset to ACTIVE_LICENSED
+            v.status = STATUS_ACTIVE  # 1: Restored to ACTIVE_LICENSED
             v.verdict = "CLEAN_AUTHORIZED"
 
             # Anti-Harassment: If creator staked a bond and lost, award it to licensee as compensation
             if creator_bond > bigint(0):
-                v.creator_bond = bigint(0)
                 gl.get_contract_at(v.licensee).emit_transfer(value=u256(creator_bond))
 
     @gl.public.write
     def reclaim_deposit(self, vault_id: str) -> None:
         """
-        Licensee reclaims guarantee deposit after licensing period expires without confirmed infringement.
+        Licensee reclaims guarantee deposit after licensing period expires without confirmed infringement,
+        OR if an audit is stalled beyond the safety timeout.
         """
         if vault_id not in self.vaults:
             raise gl.UserError(f"Vault {vault_id} does not exist.")
@@ -389,34 +565,37 @@ Respond ONLY with valid JSON without markdown code fences:
         if gl.message.sender_address != v.licensee:
             raise gl.UserError("Only the licensee can reclaim the guarantee deposit.")
 
-        self.vault_counter = self.vault_counter + u64(1)
-        current_block = u256(int(self.vault_counter))
+        now = self._now()
 
-        if v.status == u8(1):
-            # Timeout protection: Stalled audit over 50 actions allows licensee to reclaim
-            if current_block < (v.audit_started_block + u256(50)):
+        # Case 1: Active license reached duration expiry
+        if v.status == STATUS_ACTIVE:
+            if v.expires_at > bigint(0) and now < v.expires_at:
+                raise gl.UserError("Cannot reclaim: License duration has not yet expired.")
+
+        # Case 2: Stalled audit protection
+        elif v.status == STATUS_DISPUTE_FILED or v.status == STATUS_DEFENSE_SUBMITTED:
+            stall_deadline = v.defense_deadline + bigint(STALL_TIMEOUT_SECONDS)
+            if v.defense_deadline > bigint(0) and now < stall_deadline:
                 raise gl.UserError("Cannot reclaim: Dispute is currently undergoing active jury audit.")
-            
-            # Refund creator bond if audit stalled to avoid locking funds
+
+            # Audit stalled past 3 days timeout: Refund creator bond to avoid locked funds
             creator_bond = v.creator_bond
             v.creator_bond = bigint(0)
             if creator_bond > bigint(0):
                 gl.get_contract_at(v.creator).emit_transfer(value=u256(creator_bond))
 
-        elif v.status == u8(0):
-            if current_block < v.expires_at_block:
-                raise gl.UserError("Cannot reclaim: License duration has not yet expired.")
         else:
-            raise gl.UserError("Vault deposit is already settled or reclaimed.")
+            raise gl.UserError("Vault deposit is already settled or not yet funded.")
 
-        v.status = u8(3)  # EXPIRED_REFUNDED
+        v.status = STATUS_EXPIRED_REFUNDED  # 8: EXPIRED_REFUNDED
         v.verdict = "CLEAN_EXPIRED"
         v.reason = "License period ended with zero confirmed infringements. Deposit reclaimed."
 
         deposit_val = v.escrow_deposit
         self.total_deposit_locked = self.total_deposit_locked - deposit_val
 
-        gl.get_contract_at(v.licensee).emit_transfer(value=u256(deposit_val))
+        if deposit_val > bigint(0):
+            gl.get_contract_at(v.licensee).emit_transfer(value=u256(deposit_val))
 
     # --- Read-only Views ---
 
@@ -431,9 +610,11 @@ Respond ONLY with valid JSON without markdown code fences:
             "vault_id": v.vault_id,
             "creator": _addr_str(v.creator),
             "licensee": _addr_str(v.licensee),
+            "required_deposit": str(v.required_deposit),
             "escrow_deposit": str(v.escrow_deposit),
             "creator_bond": str(v.creator_bond),
             "ip_style_spec": v.ip_style_spec,
+            "duration_seconds": str(v.duration_seconds),
             "infringement_url": v.infringement_url,
             "defense_url": v.defense_url,
             "defense_statement": v.defense_statement,
@@ -442,8 +623,14 @@ Respond ONLY with valid JSON without markdown code fences:
             "reason": v.reason,
             "confidence": int(v.confidence),
             "similarity_score": int(v.similarity_score),
-            "created_at_block": str(v.created_at_block),
-            "expires_at_block": str(v.expires_at_block),
+            "created_at": str(v.created_at),
+            "activated_at": str(v.activated_at),
+            "expires_at": str(v.expires_at),
+            "defense_deadline": str(v.defense_deadline),
+            "split_proposer": _addr_str(v.split_proposer),
+            # Backwards compatibility fields for frontend
+            "created_at_block": str(v.created_at),
+            "expires_at_block": str(v.expires_at),
         }
         return json.dumps(data)
 
@@ -473,9 +660,11 @@ Respond ONLY with valid JSON without markdown code fences:
                 "vault_id": v.vault_id,
                 "creator": _addr_str(v.creator),
                 "licensee": _addr_str(v.licensee),
+                "required_deposit": str(v.required_deposit),
                 "escrow_deposit": str(v.escrow_deposit),
                 "creator_bond": str(v.creator_bond),
                 "ip_style_spec": v.ip_style_spec,
+                "duration_seconds": str(v.duration_seconds),
                 "infringement_url": v.infringement_url,
                 "defense_url": v.defense_url,
                 "defense_statement": v.defense_statement,
@@ -484,8 +673,13 @@ Respond ONLY with valid JSON without markdown code fences:
                 "reason": v.reason,
                 "confidence": int(v.confidence),
                 "similarity_score": int(v.similarity_score),
-                "created_at_block": str(v.created_at_block),
-                "expires_at_block": str(v.expires_at_block),
+                "created_at": str(v.created_at),
+                "activated_at": str(v.activated_at),
+                "expires_at": str(v.expires_at),
+                "defense_deadline": str(v.defense_deadline),
+                "split_proposer": _addr_str(v.split_proposer),
+                "created_at_block": str(v.created_at),
+                "expires_at_block": str(v.expires_at),
             })
         return json.dumps(vaults_list)
 

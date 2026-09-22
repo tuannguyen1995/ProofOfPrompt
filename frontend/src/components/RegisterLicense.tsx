@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { X, Shield, Key, Clock, Coins, Sparkles, HelpCircle } from 'lucide-react';
+import { X, Shield, Key, Clock, Coins, Sparkles, CheckCircle2 } from 'lucide-react';
 import { isAddress } from 'viem';
 
 interface RegisterLicenseProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (licensee: `0x${string}`, spec: string, duration: number, depositGen: string) => Promise<void>;
+  onSubmit: (licensee: `0x${string}`, spec: string, durationSeconds: number, depositGen: string) => Promise<void>;
   isSubmitting: boolean;
 }
 
@@ -41,8 +41,8 @@ export const RegisterLicense: React.FC<RegisterLicenseProps> = ({
 }) => {
   const [licensee, setLicensee] = useState('');
   const [spec, setSpec] = useState('');
-  const [duration, setDuration] = useState('5000');
-  const [deposit, setDeposit] = useState('1.0');
+  const [durationDays, setDurationDays] = useState('30');
+  const [requiredDeposit, setRequiredDeposit] = useState('1.0');
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -66,20 +66,21 @@ export const RegisterLicense: React.FC<RegisterLicenseProps> = ({
       return;
     }
 
-    const durationNum = parseInt(duration, 10);
-    if (isNaN(durationNum) || durationNum <= 0) {
-      setError('License duration must be greater than 0 blocks.');
+    const daysNum = parseFloat(durationDays);
+    if (isNaN(daysNum) || daysNum <= 0) {
+      setError('License duration must be greater than 0 days.');
       return;
     }
+    const durationSeconds = Math.round(daysNum * 86400);
 
-    const depositNum = parseFloat(deposit);
+    const depositNum = parseFloat(requiredDeposit);
     if (isNaN(depositNum) || depositNum <= 0) {
-      setError('Guarantee escrow deposit must be greater than 0 GEN.');
+      setError('Required guarantee collateral deposit must be greater than 0 GEN.');
       return;
     }
 
     try {
-      await onSubmit(cleanLicensee as `0x${string}`, spec.trim(), durationNum, deposit);
+      await onSubmit(cleanLicensee as `0x${string}`, spec.trim(), durationSeconds, requiredDeposit);
       onClose();
     } catch (err: any) {
       setError(err?.message || 'Transaction failed. Check MetaMask confirmation.');
@@ -97,10 +98,10 @@ export const RegisterLicense: React.FC<RegisterLicenseProps> = ({
             </div>
             <div>
               <h3 className="font-display font-bold text-lg text-ink-900">
-                Register AI IP License Vault
+                Propose Two-Sided AI IP License
               </h3>
               <p className="text-xs text-ink-500">
-                Lock infringement guarantee collateral & register protected Style DNA
+                Step 1 of Two-Sided Escrow: Propose terms & Style DNA (Creator pays 0 deposit)
               </p>
             </div>
           </div>
@@ -133,7 +134,7 @@ export const RegisterLicense: React.FC<RegisterLicenseProps> = ({
             <input
               type="text"
               required
-              placeholder="0x71C... (recipient authorized to deploy outputs)"
+              placeholder="0x7099... (designated licensee authorized to fund & deploy)"
               value={licensee}
               onChange={(e) => setLicensee(e.target.value)}
               className="w-full px-3.5 py-2 text-sm bg-linen-50 border border-linen-300 rounded-md text-ink-900 font-mono focus:outline-none focus:ring-2 focus:ring-ultramarine focus:bg-white transition-all"
@@ -179,7 +180,7 @@ export const RegisterLicense: React.FC<RegisterLicenseProps> = ({
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-ink-700 mb-1.5 flex items-center space-x-1.5">
                 <Coins className="w-3.5 h-3.5 text-ink-500" />
-                <span>Guarantee Deposit (GEN)</span>
+                <span>Required Licensee Collateral (GEN)</span>
               </label>
               <div className="relative">
                 <input
@@ -187,8 +188,8 @@ export const RegisterLicense: React.FC<RegisterLicenseProps> = ({
                   step="0.1"
                   min="0.01"
                   required
-                  value={deposit}
-                  onChange={(e) => setDeposit(e.target.value)}
+                  value={requiredDeposit}
+                  onChange={(e) => setRequiredDeposit(e.target.value)}
                   className="w-full px-3.5 py-2 text-sm bg-linen-50 border border-linen-300 rounded-md text-ink-900 font-mono focus:outline-none focus:ring-2 focus:ring-ultramarine focus:bg-white transition-all"
                 />
                 <span className="absolute right-3 top-2 text-xs font-mono font-semibold text-ink-400">
@@ -196,34 +197,34 @@ export const RegisterLicense: React.FC<RegisterLicenseProps> = ({
                 </span>
               </div>
               <span className="text-[10px] text-ink-400 mt-1 block">
-                Slashed & transferred to creator upon verified copyright breach.
+                Funded by the Licensee upon acceptance to activate the license.
               </span>
             </div>
 
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-ink-700 mb-1.5 flex items-center space-x-1.5">
                 <Clock className="w-3.5 h-3.5 text-ink-500" />
-                <span>Term Duration (Blocks)</span>
+                <span>License Term (Days)</span>
               </label>
               <input
                 type="number"
-                min="10"
+                min="1"
                 required
-                value={duration}
-                onChange={(e) => setDuration(e.target.value)}
+                value={durationDays}
+                onChange={(e) => setDurationDays(e.target.value)}
                 className="w-full px-3.5 py-2 text-sm bg-linen-50 border border-linen-300 rounded-md text-ink-900 font-mono focus:outline-none focus:ring-2 focus:ring-ultramarine focus:bg-white transition-all"
               />
               <span className="text-[10px] text-ink-400 mt-1 block">
-                ~5000 blocks ≈ 1 week. Licensee can reclaim deposit after expiration.
+                ~30 days standard. Licensee reclaims collateral upon clean term expiry.
               </span>
             </div>
           </div>
 
-          {/* Explanation Box */}
-          <div className="bg-linen-100 border border-linen-300 rounded-lg p-3 text-xs text-ink-700 flex items-start space-x-2">
-            <HelpCircle className="w-4 h-4 text-ultramarine shrink-0 mt-0.5" />
+          {/* Two-Sided Justice Safeguard Highlight */}
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-900 flex items-start space-x-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
             <span>
-              <strong>Economic Security Model:</strong> The escrow deposit is locked on-chain. If an unauthorized commercial deployment is verified by GenLayer&apos;s AI Jury, the entire deposit is automatically slashed and awarded to the IP creator as liquidated damages.
+              <strong>Two-Sided Escrow Guarantee:</strong> As Creator, you pay <strong>0 GEN</strong> upfront deposit. The designated licensee must independently accept and fund their own collateral before the license becomes active.
             </span>
           </div>
 
@@ -242,7 +243,7 @@ export const RegisterLicense: React.FC<RegisterLicenseProps> = ({
               disabled={isSubmitting}
               className="px-5 py-2 text-sm font-semibold text-white bg-ultramarine hover:bg-ultramarine-hover rounded-md shadow-subtle transition-all disabled:opacity-50"
             >
-              {isSubmitting ? 'Locking Escrow on Studionet...' : 'Lock Escrow & Mint License'}
+              {isSubmitting ? 'Publishing Proposal to Studionet...' : 'Publish License Terms (0 GEN)'}
             </button>
           </div>
         </form>

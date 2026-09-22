@@ -57,6 +57,34 @@ def reset_contracts():
     clear_known_contracts()
 
 
+@pytest.fixture(autouse=True)
+def sync_direct_vm_warp(direct_vm):
+    """
+    Ensure direct_vm.warp also synchronizes gl.message_raw['datetime']
+    so contracts prioritizing authoritative gl.message_raw['datetime']
+    receive the exact warped timestamp.
+    """
+    orig_warp = direct_vm.warp
+
+    def _wrapped_warp(timestamp: str) -> None:
+        orig_warp(timestamp)
+        import sys
+        for mod_name in ("genlayer.gl", "genlayer"):
+            if mod_name in sys.modules:
+                mod = sys.modules[mod_name]
+                if hasattr(mod, "message_raw") and isinstance(mod.message_raw, dict):
+                    mod.message_raw["datetime"] = timestamp
+                if hasattr(mod, "gl") and hasattr(mod.gl, "message_raw") and isinstance(mod.gl.message_raw, dict):
+                    mod.gl.message_raw["datetime"] = timestamp
+        # Also patch any loaded contract modules
+        for name, m in list(sys.modules.items()):
+            if name.startswith("_contract_"):
+                if hasattr(m, "gl") and hasattr(m.gl, "message_raw") and isinstance(m.gl.message_raw, dict):
+                    m.gl.message_raw["datetime"] = timestamp
+
+    direct_vm.warp = _wrapped_warp
+
+
 @pytest.fixture
 def mock_infringement_llm_and_web():
     """Returns bare-dict mock parameters for confirmed infringement."""

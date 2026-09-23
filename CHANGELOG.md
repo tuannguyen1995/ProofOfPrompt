@@ -5,9 +5,19 @@ All notable changes to the **ProofOfPrompt** protocol and application are docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-09-23
+### Fixed & Hardened (Steward Review Refinements)
+- **Resolved `propose_license` Address Construction Error:** Replaced string zero address with `Address(bytes(20))` and introduced `_to_address()` coercion helper to prevent `AttributeError: 'str' object has no attribute 'as_bytes'` on storage write.
+- **Fixed Stranded Funds in `register_license`:** Automatically refunds attached `msg.value` to caller so no GEN is stranded in the contract during two-sided proposal workflows.
+- **Cleared Stale `split_proposer` State:** Explicitly resets `split_proposer = ZERO_ADDRESS` and clears dispute evidence/deadlines whenever a vault re-enters `STATUS_ACTIVE` after a `CLEAN_AUTHORIZED` ruling.
+- **Added GenVM Execution Result Inspection in Frontend:** Updated `waitForTransactionReceipt` to query `eth_getTransactionByHash` and inspect `consensus_data.leader_receipt` for `execution_result` and `result.status`, preventing false green success banners on reverted transactions.
+- **Updated Explorer URL:** Replaced defunct `genlayer-explorer.vercel.app` (503) with working `https://explorer-studio.genlayer.com`.
+- **Reconciled Documentation:** Aligned `ARCHITECTURE.md` state machine diagram and state table with the 9-state protocol enum (`STATUS_OFFERED` through `STATUS_EXPIRED_REFUNDED`).
+- **Added Pinned `requirements.txt`:** Added reproducible dependency file (`genlayer-py==0.18.0`, `genlayer-test==0.29.2`, `pytest==9.1.1`...).
+
 ## [1.1.0] - 2026-09-19
 ### Added
-- **Synchronized Deployed Contract Address:** `0xDB02327FE8cFAbF2066A0AB0Bfd762135E4a0290` on GenLayer Studionet.
+- **Synchronized Deployed Contract Address:** `0xFef901554A09048ebB11bad41B1Fe68ef3951241` on GenLayer Studionet.
 - **Two-Sided Justice Architecture:**
   - **Creator Anti-Harassment Dispute Bond:** Requires creators to stake a bond when initiating a dispute; forfeited to the licensee if the claim is frivolous/clean.
   - **Licensee Right of Defense (`SubmitDefense` modal):** Licensees can submit a rebuttal defense statement and counter-evidence URL prior to jury trial.

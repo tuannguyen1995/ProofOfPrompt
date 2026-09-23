@@ -13,6 +13,22 @@ def _addr_str(addr: Address) -> str:
         return str(addr)
 
 
+def _to_address(addr) -> Address:
+    """Safely coerce any input (Address, bytes, or hex str) into a valid GenVM Address instance."""
+    if isinstance(addr, Address):
+        return addr
+    if isinstance(addr, (bytes, bytearray)):
+        if len(addr) == 20:
+            return Address(bytes(addr))
+        addr_str = addr.decode("utf-8", errors="ignore").strip()
+    else:
+        addr_str = str(addr).strip()
+    return Address(addr_str)
+
+
+ZERO_ADDRESS = Address(bytes(20))
+
+
 # --- Protocol Status Lifecycle ---
 STATUS_OFFERED = u8(0)           # Creator proposed terms, awaiting Licensee collateral funding
 STATUS_ACTIVE = u8(1)            # Licensee accepted and funded collateral deposit
@@ -123,8 +139,8 @@ class Contract(gl.Contract):
 
         new_vault = LicenseVault(
             vault_id=vault_id,
-            creator=gl.message.sender_address,
-            licensee=licensee_addr,
+            creator=_to_address(gl.message.sender_address),
+            licensee=_to_address(licensee_addr),
             required_deposit=required_deposit,
             escrow_deposit=bigint(0),
             creator_bond=bigint(0),
@@ -142,7 +158,7 @@ class Contract(gl.Contract):
             activated_at=bigint(0),
             expires_at=bigint(0),
             defense_deadline=bigint(0),
-            split_proposer=Address("0x0000000000000000000000000000000000000000"),
+            split_proposer=ZERO_ADDRESS,
         )
 
         self.vaults[vault_id] = new_vault
@@ -159,8 +175,14 @@ class Contract(gl.Contract):
         """
         Convenience wrapper: Creates a license proposal with required_deposit = msg.value
         (if msg.value > 0) or default 1 GEN.
+        Fix stranded funds: Any msg.value sent here is immediately refunded to the caller
+        because licensee collateral must be independently funded by the licensee in Step 2.
         """
-        req_dep = bigint(gl.message.value) if gl.message.value > 0 else bigint(1_000_000_000_000_000_000)
+        attached = bigint(gl.message.value)
+        if attached > bigint(0):
+            gl.get_contract_at(gl.message.sender_address).emit_transfer(value=attached)
+
+        req_dep = attached if attached > bigint(0) else bigint(1_000_000_000_000_000_000)
         return self.propose_license(licensee_addr, ip_style_spec, req_dep, duration_seconds)
 
     @gl.public.write.payable
@@ -190,6 +212,7 @@ class Contract(gl.Contract):
         v.expires_at = now + v.duration_seconds
         v.verdict = "PENDING"
         v.reason = "License active and funded. Licensee granted commercial authorization."
+        v.split_proposer = ZERO_ADDRESS
 
         self.total_deposit_locked = self.total_deposit_locked + funded
 
@@ -306,16 +329,14 @@ class Contract(gl.Contract):
             raise gl.UserError(f"Vault {vault_id} does not exist.")
 
         v = self.vaults[vault_id]
-        sender = gl.message.sender_address
+        sender = _to_address(gl.message.sender_address)
         if sender != v.creator and sender != v.licensee:
             raise gl.UserError("Only the creator or licensee can participate in mutual split compromise.")
 
         if v.status != STATUS_DISPUTE_FILED and v.status != STATUS_DEFENSE_SUBMITTED:
             raise gl.UserError("Mutual split compromise is only available during active dispute.")
 
-        empty_addr = Address("0x0000000000000000000000000000000000000000")
-
-        if v.split_proposer == empty_addr:
+        if v.split_proposer == ZERO_ADDRESS:
             # First party proposed
             v.split_proposer = sender
             role = "Creator" if sender == v.creator else "Licensee"
@@ -547,6 +568,11 @@ Respond ONLY with valid JSON without markdown code fences:
             # CLEAN_AUTHORIZED: Claim dismissed
             v.status = STATUS_ACTIVE  # 1: Restored to ACTIVE_LICENSED
             v.verdict = "CLEAN_AUTHORIZED"
+            v.split_proposer = ZERO_ADDRESS
+            v.infringement_url = ""
+            v.defense_url = ""
+            v.defense_statement = ""
+            v.defense_deadline = bigint(0)
 
             # Anti-Harassment: If creator staked a bond and lost, award it to licensee as compensation
             if creator_bond > bigint(0):

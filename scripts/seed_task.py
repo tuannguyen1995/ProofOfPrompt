@@ -2,7 +2,7 @@ import time
 from genlayer_py import create_account, create_client, studionet
 from genlayer_py.abi.calldata.encoder import CalldataAddress
 
-CONTRACT = "0xE38BC7Faf199244fe2bFe4782d9955e1479aDd8E"
+CONTRACT = "0xFef901554A09048ebB11bad41B1Fe68ef3951241"
 PK_CREATOR = "0x1b807b1df022a40f872596b11565e6b6856547dc66996bd3d5a85b376ea3a0ef"
 PK_LICENSEE = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
 

@@ -12,32 +12,41 @@ In traditional web3 and EVM-compatible networks, intellectual property licensing
 
 ---
 
-## 2. State Machine: LicenseVault Lifecycle
+## 2. State Machine: LicenseVault Lifecycle (9-State Protocol)
 
 ```mermaid
 stateDiagram-v2
-    [*] --> ACTIVE_LICENSED : register_license(payable GEN)
-    ACTIVE_LICENSED --> IN_AUDIT : file_infringement_claim(creator_bond)
-    ACTIVE_LICENSED --> EXPIRED_REFUNDED : reclaim_deposit(after expiration)
+    [*] --> STATUS_OFFERED : propose_license (0 upfront deposit)
+    STATUS_OFFERED --> STATUS_ACTIVE : accept_and_fund_license (Licensee collateral)
     
-    IN_AUDIT --> IN_AUDIT : submit_licensee_defense(rebuttal, counter_url)
-    IN_AUDIT --> MUTUAL_CONCEDED : concede_claim(licensee settles)
-    IN_AUDIT --> INFRINGED_SLASHED : adjudicate_infringement [FULL_INFRINGEMENT]
-    IN_AUDIT --> PARTIAL_SLASHED : adjudicate_infringement [PARTIAL_INFRINGEMENT]
-    IN_AUDIT --> ACTIVE_LICENSED : adjudicate_infringement [CLEAN_AUTHORIZED]
-    IN_AUDIT --> EXPIRED_REFUNDED : reclaim_deposit [stalled audit > 50 blocks]
+    STATUS_ACTIVE --> STATUS_DISPUTE_FILED : file_infringement_claim (Creator bond, 24h window)
+    STATUS_ACTIVE --> STATUS_EXPIRED_REFUNDED : reclaim_deposit (Term expired)
+    
+    STATUS_DISPUTE_FILED --> STATUS_DEFENSE_SUBMITTED : submit_licensee_defense (Rebuttal)
+    STATUS_DISPUTE_FILED --> STATUS_MUTUAL_CONCEDED : concede_claim / propose_mutual_split
+    STATUS_DEFENSE_SUBMITTED --> STATUS_MUTUAL_CONCEDED : propose_mutual_split (50/50 settlement)
+    
+    STATUS_DEFENSE_SUBMITTED --> STATUS_FULL_SLASHED : adjudicate_infringement [FULL_INFRINGEMENT]
+    STATUS_DEFENSE_SUBMITTED --> STATUS_PARTIAL_SLASHED : adjudicate_infringement [PARTIAL_INFRINGEMENT]
+    STATUS_DEFENSE_SUBMITTED --> STATUS_ACTIVE : adjudicate_infringement [CLEAN_AUTHORIZED]
+    
+    STATUS_DISPUTE_FILED --> STATUS_FULL_SLASHED : adjudicate_infringement [After 24h defense window]
+    STATUS_DISPUTE_FILED --> STATUS_EXPIRED_REFUNDED : reclaim_deposit [Stalled audit > 3 days]
 ```
 
 ### State Definitions
 
 | Status Code | Enum Name | Description |
 |:---:|:---|:---|
-| `0` | `ACTIVE_LICENSED` | Vault active. Licensee is permitted to generate outputs according to the terms. Escrow locked. |
-| `1` | `IN_AUDIT` | Creator filed dispute with anti-harassment bond. Licensee can file rebuttal before AI trial. |
-| `2` | `INFRINGED_SLASHED` | AI Jury confirmed full copyright piracy. 100% deposit slashed to Creator; creator bond refunded. |
-| `3` | `EXPIRED_REFUNDED` | Licensing term concluded with zero verified infringements. Guarantee deposit refunded to Licensee. |
-| `4` | `PARTIAL_SLASHED` | AI Jury confirmed partial derivative infringement. 50% deposit slashed to Creator, 50% retained by Licensee. |
-| `5` | `MUTUAL_CONCEDED` | Licensee amicably conceded the dispute without contest. Deposit slashed to Creator, bond returned. |
+| `0` | `STATUS_OFFERED` | License terms proposed by creator with 0 upfront deposit; awaiting Licensee collateral funding. |
+| `1` | `STATUS_ACTIVE` | Licensee accepted terms and deposited collateral. Protection active. |
+| `2` | `STATUS_DISPUTE_FILED` | Creator staked anti-harassment bond (>=10%) to initiate dispute. 24h defense window active. |
+| `3` | `STATUS_DEFENSE_SUBMITTED` | Licensee submitted rebuttal statements and counter-evidence. Adjudication unlocked. |
+| `4` | `STATUS_MUTUAL_CONCEDED` | Amicably conceded or settled via out-of-court 50/50 compromise (`propose_mutual_split`). |
+| `5` | `STATUS_FULL_SLASHED` | AI Jury confirmed full copyright piracy. 100% deposit slashed to Creator. |
+| `6` | `STATUS_PARTIAL_SLASHED` | AI Jury confirmed partial derivative infringement. Balanced 50/50 split of collateral. |
+| `7` | `STATUS_CLEAN_AUTHORIZED` | Claim dismissed. Creator bond forfeited to licensee as harassment damages; vault restored to `STATUS_ACTIVE`. |
+| `8` | `STATUS_EXPIRED_REFUNDED` | Licensing term concluded without confirmed infringement. Deposit reclaimed by Licensee. |
 
 ---
 

@@ -108,7 +108,7 @@ def deploy():
             f.write(ts_content)
         print(f"[+] Updated genlayer.ts fallback contract address to {contract_address}")
 
-    # 4. Update README.md
+    # 4. Update README.md and CHANGELOG.md
     readme_file = Path(__file__).parent.parent / "README.md"
     if readme_file.exists():
         with open(readme_file, "r", encoding="utf-8") as f:
@@ -117,6 +117,16 @@ def deploy():
         with open(readme_file, "w", encoding="utf-8") as f:
             f.write(readme_content)
         print(f"[+] Updated README.md with {contract_address}")
+
+    changelog_file = Path(__file__).parent.parent / "CHANGELOG.md"
+    if changelog_file.exists():
+        with open(changelog_file, "r", encoding="utf-8") as f:
+            cl_content = f.read()
+        cl_content = re.sub(r"contract address \`0x[0-9a-fA-F]+\`", f"contract address `{contract_address}`", cl_content, flags=re.IGNORECASE)
+        cl_content = re.sub(r"Synchronized Deployed Contract Address:\*\* \`0x[0-9a-fA-F]+\`", f"Synchronized Deployed Contract Address:** `{contract_address}`", cl_content)
+        with open(changelog_file, "w", encoding="utf-8") as f:
+            f.write(cl_content)
+        print(f"[+] Updated CHANGELOG.md with {contract_address}")
 
     # 5. Update scripts/seed_task.py & complete_task_trial.py
     seed_script = Path(__file__).parent.parent / "scripts" / "seed_task.py"

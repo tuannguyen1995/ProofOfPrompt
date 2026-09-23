@@ -1,7 +1,7 @@
 import { defineChain, toRlp, encodeAbiParameters, parseAbiParameters } from 'viem';
 
 // Target Contract on Studionet
-export const CONTRACT_ADDRESS = (import.meta.env.VITE_CONTRACT_ADDRESS || '0xE38BC7Faf199244fe2bFe4782d9955e1479aDd8E') as `0x${string}`;
+export const CONTRACT_ADDRESS = (import.meta.env.VITE_CONTRACT_ADDRESS || '0xFef901554A09048ebB11bad41B1Fe68ef3951241') as `0x${string}`;
 
 // Studionet Chain Definition (Chain ID: 61999 = 0xF1EF)
 export const studionet = defineChain({
@@ -20,17 +20,17 @@ export const studionet = defineChain({
       http: ['https://studio.genlayer.com/api'],
     },
   },
-  blockExplorers: {
+    blockExplorers: {
     default: {
       name: 'GenLayer Explorer',
-      url: 'https://genlayer-explorer.vercel.app',
+      url: 'https://explorer-studio.genlayer.com',
     },
   },
 });
 
 export const STUDIONET_CHAIN_ID_HEX = `0x${studionet.id.toString(16)}`; // 61999 = 0xF1EF
 export const STUDIONET_RPC_URL = 'https://studio.genlayer.com/api';
-export const STUDIONET_EXPLORER_URL = 'https://genlayer-explorer.vercel.app';
+export const STUDIONET_EXPLORER_URL = 'https://explorer-studio.genlayer.com';
 export const STUDIO_PORTAL_URL = 'https://studio.genlayer.com';
 
 /* -------------------------------------------------------------------------- */
@@ -368,12 +368,58 @@ export async function sendContractTransaction(params: {
 }
 
 /**
- * Polls for on-chain transaction receipt on GenLayer Studionet.
+ * Polls for on-chain transaction receipt and verifies GenVM execution result on GenLayer Studionet.
+ * Strictly verifies Return vs Contract Error to prevent false success reporting.
  */
 export async function waitForTransactionReceipt(txHash: string, timeoutMs = 90000): Promise<any> {
   const startTime = Date.now();
   while (Date.now() - startTime < timeoutMs) {
     try {
+      // 1. Fetch full transaction details including GenVM consensus_data and leader_receipt
+      const txRes = await fetch(STUDIONET_RPC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_getTransactionByHash',
+          params: [txHash],
+          id: Date.now(),
+        }),
+      });
+      const txJson = await txRes.json();
+      const txData = txJson?.result;
+
+      if (txData && txData.consensus_data?.leader_receipt) {
+        const receipts = Array.isArray(txData.consensus_data.leader_receipt)
+          ? txData.consensus_data.leader_receipt
+          : [txData.consensus_data.leader_receipt];
+        const leader = receipts.find((r: any) => r.mode === 'leader') || receipts[0];
+
+        if (leader) {
+          const execRes = leader.execution_result;
+          const status = leader.result?.status;
+          const isContractError =
+            execRes === 'ERROR' ||
+            status === 'contract_error' ||
+            leader.genvm_result?.error_description ||
+            (leader.genvm_result?.stderr && leader.genvm_result.stderr.includes('Traceback'));
+
+          if (isContractError) {
+            const rawError =
+              leader.genvm_result?.error_description ||
+              leader.genvm_result?.stderr ||
+              leader.result?.payload ||
+              'Contract Error (Execution reverted in GenVM)';
+            throw new Error(`Transaction reverted on-chain: ${rawError}`);
+          }
+
+          if (execRes === 'SUCCESS' && (status === 'return' || status === undefined)) {
+            return txData;
+          }
+        }
+      }
+
+      // 2. Check standard EVM receipt status
       const res = await fetch(STUDIONET_RPC_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -389,27 +435,9 @@ export async function waitForTransactionReceipt(txHash: string, timeoutMs = 9000
         if (data.result.status === '0x0' || data.result.status === 0) {
           throw new Error(`Transaction reverted on-chain (Tx: ${txHash})`);
         }
-        return data.result;
       }
     } catch (e: any) {
       if (e?.message?.includes('reverted')) throw e;
-    }
-
-    if (typeof window !== 'undefined' && (window as any).ethereum) {
-      try {
-        const receipt = await (window as any).ethereum.request({
-          method: 'eth_getTransactionReceipt',
-          params: [txHash],
-        });
-        if (receipt) {
-          if (receipt.status === '0x0' || receipt.status === 0) {
-            throw new Error(`Transaction reverted on-chain (Tx: ${txHash})`);
-          }
-          return receipt;
-        }
-      } catch (e: any) {
-        if (e?.message?.includes('reverted')) throw e;
-      }
     }
 
     await new Promise((r) => setTimeout(r, 2000));

@@ -2,7 +2,7 @@
 
 > **Track:** Subjective Consensus / AI Governance / Future of Work  
 > **Target Network:** GenLayer Studionet (Chain ID: `61999` / `0xF1EF`, RPC: `https://studio.genlayer.com/api`)  
-> **Deployed Contract:** `0xE38BC7Faf199244fe2bFe4782d9955e1479aDd8E`  
+> **Deployed Contract:** `0xFef901554A09048ebB11bad41B1Fe68ef3951241`  
 > **Live App (Vercel):** [https://proofofprompt.vercel.app](https://proofofprompt.vercel.app)  
 > **GitHub Repository:** [https://github.com/tuannguyen1995/ProofOfPrompt](https://github.com/tuannguyen1995/ProofOfPrompt)  
 > **UI Aesthetic:** Minimal Bauhaus & Gallery Art (`#F7F5F0` canvas, razor-thin `#E2DED4` borders, Syne / Space Grotesk typography, Ultramarine Blue `#1D4ED8`)
@@ -147,33 +147,47 @@ ProofOfPrompt/
 
 ---
 
+> **Explorer:** [https://explorer-studio.genlayer.com/address/0xFef901554A09048ebB11bad41B1Fe68ef3951241](https://explorer-studio.genlayer.com/address/0xFef901554A09048ebB11bad41B1Fe68ef3951241)  
+
+---
+
 ## 🧪 Running Automated Tests
 
-The testing suite uses `gltest` (the official pytest runner for GenLayer):
+The testing suite uses `gltest` (the official pytest runner for GenLayer). All dependencies are pinned in `requirements.txt` for 100% reproducible execution:
 
 ```bash
-# Run against Studionet or local simulator
+# 1. Install pinned test dependencies
+pip install -r requirements.txt
+
+# 2. Run the full test suite
 pytest tests/ -v
 ```
 
-### Covered Test Scenarios (100% Passing via GenVM Direct Execution):
-- `test_register_license_and_views`: Validates escrow deposit locking, ID indexing, and pagination views.
-- `test_file_infringement_claim_with_dispute_bond`: Verifies creator access control, anti-harassment dispute bond, and unauthorized rejections.
-- `test_licensee_submits_defense`: Validates Licensee Right of Defense and unauthorized access rejections.
-- `test_licensee_concedes_claim`: Validates Amicable Settlement / concession escape hatch without court overhead.
-- `test_adjudicate_full_infringement_slashes`: Tests AI Jury consensus confirming copyright piracy and 100% slashing.
-- `test_adjudicate_partial_infringement_graduated_slash`: Tests 3-tier graduated ruling (50% slash / 50% refund for derivative works).
-- `test_adjudicate_clean_compensates_licensee`: Tests dismissal of unproven claims and awarding creator's dispute bond to licensee.
-- `test_reclaim_deposit_expired`: Validates licensee collateral refund upon term conclusion.
+### Covered Test Scenarios (14/14 Passing via GenVM Direct Execution):
+- `test_propose_and_accept_license_flow`: Validates two-sided proposal, licensee rejection of strangers, and independent collateral funding.
+- `test_mandatory_claim_bond_enforcement`: Verifies creator must stake >=10% dispute bond.
+- `test_enforced_defense_window_blocks_immediate_trial`: Enforces 24-hour defense window locking premature trials.
+- `test_licensee_submits_defense_opens_adjudication`: Validates licensee rebuttal submission unlocks AI court trial.
+- `test_concede_claim_settles_amicably`: Validates voluntary concession without jury trial.
+- `test_propose_mutual_split_compromise`: Validates 50/50 compromise mutual settlement.
+- `test_adjudicate_full_infringement_slashes_100_percent`: Tests AI Jury consensus confirming copyright piracy and 100% slashing.
+- `test_adjudicate_partial_infringement_fair_50_50_split`: Tests 3-tier graduated ruling (50/50 balanced split of collateral).
+- `test_adjudicate_clean_awards_creator_bond_to_licensee`: Tests dismissal of unproven claims and awarding creator's dispute bond to licensee.
+- `test_reclaim_deposit_expired_chain_time`: Validates licensee collateral refund upon term conclusion.
+- `test_adjudicate_after_defense_window_expires_without_defense`: Trial unlocks after 24h defense window if licensee remains silent.
+- `test_reclaim_stalled_audit_refunds_both_deposit_and_bond`: Validates safety timeout refund if audit stalls past 3 days.
+- `test_clean_authorized_resets_split_proposer_and_dispute_fields`: Asserts `split_proposer = ZERO_ADDRESS` and clears dispute state upon claim dismissal.
+- `test_register_license_refunds_attached_value`: Asserts convenience wrapper refunds attached funds to avoid stranded capital.
 
 ---
 
 ## 🔒 Security & Best Practices
 
 - **Strict Semantic Consensus:** `validator_fn` compares `mine["verdict"] == leader["verdict"]`. Validators do not fail consensus over formatting nuances or slight phrasing variations in the explanation string.
-- **Type Safety in GenVM:** Stored money fields use unbounded `bigint`. Status codes use `u8`. Bounded percentages use `u8`. No bare `int` or `float` types.
-- **Pull/Native Push Safety:** Slashing transfers utilize `gl.get_contract_at(recipient).emit_transfer(value=u256(deposit_val))`.
-- **Timeout Protection:** If an audit remains stalled for over 50 blocks without adjudication, licensee reclaim protection unlocks.
+- **Type Safety in GenVM:** Stored money fields use unbounded `bigint`. Status codes use `u8`. Bounded percentages use `u8`.
+- **Native Direct Payouts:** Native transfers utilize `gl.get_contract_at(recipient).emit_transfer(value=deposit_val)` with direct native `bigint`.
+- **Deterministic Time:** All deadlines and durations derive strictly from runtime transaction timestamps (`gl.message_raw['datetime']`).
+- **Timeout Protection:** If an audit remains stalled for over 3 days without adjudication, licensee reclaim protection unlocks.
 
 ---
 

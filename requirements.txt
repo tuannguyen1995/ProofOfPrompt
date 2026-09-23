@@ -1,0 +1,12 @@
+# Pinned dependencies for ProofOfPrompt test and development environment
+# Python 3.12+ / 3.13 compatible
+
+genlayer-py==0.18.0
+genlayer-test==0.29.2
+pytest==9.1.1
+web3==7.16.0
+eth-account==0.13.7
+eth-abi==5.2.0
+python-dotenv==1.2.2
+pyyaml==6.0.3
+requests==2.34.2

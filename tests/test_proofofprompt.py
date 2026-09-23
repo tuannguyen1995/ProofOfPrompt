@@ -517,3 +517,82 @@ def test_reclaim_stalled_audit_refunds_both_deposit_and_bond(direct_deploy, dire
     assert vault["status"] == 8  # STATUS_EXPIRED_REFUNDED
     assert int(vault["creator_bond"]) == 0
 
+
+def test_clean_authorized_resets_split_proposer_and_dispute_fields(direct_deploy, direct_vm, direct_alice, direct_bob):
+    """Test that CLEAN_AUTHORIZED restores vault to STATUS_ACTIVE and cleans split_proposer and dispute fields."""
+    creator = direct_alice
+    licensee = direct_bob
+
+    direct_vm.sender = creator
+    contract = direct_deploy(str(CONTRACT_PATH))
+    import sys
+    Address = sys.modules["genlayer"].Address
+
+    deposit = 5_000_000_000_000_000_000
+    contract.propose_license(Address(licensee), "DNA", deposit, 86400 * 30)
+
+    direct_vm.sender = licensee
+    direct_vm.value = deposit
+    contract.accept_and_fund_license("ip-1")
+
+    # Creator files dispute
+    direct_vm.sender = creator
+    direct_vm.value = 500_000_000_000_000_000  # 0.5 GEN bond
+    contract.file_infringement_claim("ip-1", "https://evidence.io/infringe")
+
+    # Licensee proposes mutual split during dispute
+    direct_vm.sender = licensee
+    direct_vm.value = 0
+    contract.propose_mutual_split("ip-1")
+
+    vault_dispute = json.loads(contract.get_vault("ip-1"))
+    assert vault_dispute["split_proposer"].lower() == Address(licensee).as_hex.lower()
+
+    # Licensee submits defense
+    contract.submit_licensee_defense("ip-1", "https://defense.io", "Authorized usage")
+
+    # Mock Clean Authorized ruling
+    direct_vm.mock_web(".*", {
+        "status": 200,
+        "body": "Authorized original work with distinct non-matching style."
+    })
+    direct_vm.mock_llm(".*", json.dumps({
+        "verdict": "CLEAN_AUTHORIZED",
+        "confidence": 98,
+        "similarity_score": 10,
+        "reason": "Authorized original creation. Claim dismissed."
+    }))
+
+    contract.adjudicate_infringement("ip-1")
+
+    vault_after = json.loads(contract.get_vault("ip-1"))
+    assert vault_after["status"] == 1  # STATUS_ACTIVE
+    assert vault_after["verdict"] == "CLEAN_AUTHORIZED"
+    # split_proposer must be reset to zero address
+    assert vault_after["split_proposer"] == "0x0000000000000000000000000000000000000000"
+    # dispute fields must be cleared
+    assert vault_after["infringement_url"] == ""
+    assert vault_after["defense_url"] == ""
+    assert vault_after["defense_statement"] == ""
+    assert int(vault_after["defense_deadline"]) == 0
+
+
+def test_register_license_refunds_attached_value(direct_deploy, direct_vm, direct_alice, direct_bob):
+    """Test that register_license refunds attached msg.value so funds are never stranded."""
+    creator = direct_alice
+    licensee = direct_bob
+
+    direct_vm.sender = creator
+    contract = direct_deploy(str(CONTRACT_PATH))
+
+    # Creator calls register_license attaching 2 GEN
+    direct_vm.value = 2_000_000_000_000_000_000
+    vault_id = contract.register_license(licensee, "DNA Spec", 86400 * 30)
+    assert vault_id == "ip-1"
+
+    # Vault requires 2 GEN collateral from licensee, but contract holds 0 locked deposit until funded
+    vault = json.loads(contract.get_vault("ip-1"))
+    assert vault["status"] == 0  # STATUS_OFFERED
+    assert int(vault["required_deposit"]) == 2_000_000_000_000_000_000
+    assert int(vault["escrow_deposit"]) == 0
+

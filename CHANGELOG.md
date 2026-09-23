@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Updated Explorer URL:** Replaced defunct `genlayer-explorer.vercel.app` (503) with working `https://explorer-studio.genlayer.com`.
 - **Reconciled Documentation:** Aligned `ARCHITECTURE.md` state machine diagram and state table with the 9-state protocol enum (`STATUS_OFFERED` through `STATUS_EXPIRED_REFUNDED`).
 - **Added Pinned `requirements.txt`:** Added reproducible dependency file (`genlayer-py==0.18.0`, `genlayer-test==0.29.2`, `pytest==9.1.1`...).
+- **Deployed Hardened Contract on Studionet:** Synchronized with active contract `0x7DdA9559C647de311e8D86f161f1D0DF264A9A22`.
 
 ## [1.1.0] - 2026-09-19
 ### Added

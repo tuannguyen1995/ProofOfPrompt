@@ -241,6 +241,7 @@ export const App: React.FC = () => {
       return;
     }
 
+    let txHash: string | undefined;
     try {
       setActionLoading(true);
       setTxNotice({
@@ -250,7 +251,7 @@ export const App: React.FC = () => {
 
       const requiredDepositWei = parseEther(depositGen);
 
-      const txHash = await sendContractTransaction({
+      txHash = await sendContractTransaction({
         address: CONTRACT_ADDRESS,
         functionName: 'propose_license',
         args: [licensee, spec, requiredDepositWei, durationSeconds],
@@ -264,7 +265,10 @@ export const App: React.FC = () => {
         txHash,
       });
 
-      await waitForTransactionReceipt(txHash);
+      const receipt = await waitForTransactionReceipt(txHash);
+      if (!receipt) {
+        throw new Error('Transaction confirmation timed out without validation receipt.');
+      }
 
       setTxNotice({
         type: 'success',
@@ -279,8 +283,8 @@ export const App: React.FC = () => {
       setTxNotice({
         type: 'error',
         message: err?.message || 'Failed to propose license.',
+        txHash,
       });
-      throw err;
     } finally {
       setActionLoading(false);
     }
@@ -295,6 +299,7 @@ export const App: React.FC = () => {
       return;
     }
 
+    let txHash: string | undefined;
     try {
       setActionLoading(true);
       setActiveActionVaultId(vaultId);
@@ -303,7 +308,7 @@ export const App: React.FC = () => {
         message: `Funding escrow collateral for vault ${vaultId}. Confirm in MetaMask...`,
       });
 
-      const txHash = await sendContractTransaction({
+      txHash = await sendContractTransaction({
         address: CONTRACT_ADDRESS,
         functionName: 'accept_and_fund_license',
         args: [vaultId],
@@ -317,7 +322,10 @@ export const App: React.FC = () => {
         txHash,
       });
 
-      await waitForTransactionReceipt(txHash);
+      const receipt = await waitForTransactionReceipt(txHash);
+      if (!receipt) {
+        throw new Error('Transaction confirmation timed out without validation receipt.');
+      }
 
       setTxNotice({
         type: 'success',
@@ -332,6 +340,7 @@ export const App: React.FC = () => {
       setTxNotice({
         type: 'error',
         message: err?.message || 'Failed to accept and fund license.',
+        txHash,
       });
     } finally {
       setActionLoading(false);
@@ -348,6 +357,7 @@ export const App: React.FC = () => {
       return;
     }
 
+    let txHash: string | undefined;
     try {
       setActionLoading(true);
       setActiveActionVaultId(vaultId);
@@ -356,14 +366,17 @@ export const App: React.FC = () => {
         message: `Submitting 50/50 mutual split compromise for vault ${vaultId}...`,
       });
 
-      const txHash = await sendContractTransaction({
+      txHash = await sendContractTransaction({
         address: CONTRACT_ADDRESS,
         functionName: 'propose_mutual_split',
         args: [vaultId],
         from: account,
       });
 
-      await waitForTransactionReceipt(txHash);
+      const receipt = await waitForTransactionReceipt(txHash);
+      if (!receipt) {
+        throw new Error('Transaction confirmation timed out without validation receipt.');
+      }
 
       setTxNotice({
         type: 'success',
@@ -378,6 +391,7 @@ export const App: React.FC = () => {
       setTxNotice({
         type: 'error',
         message: err?.message || 'Failed to propose/confirm mutual split.',
+        txHash,
       });
     } finally {
       setActionLoading(false);
@@ -394,6 +408,7 @@ export const App: React.FC = () => {
       return;
     }
 
+    let txHash: string | undefined;
     try {
       setActionLoading(true);
       setActiveActionVaultId(vaultId);
@@ -404,7 +419,7 @@ export const App: React.FC = () => {
 
       const bondWei = bondGen && parseFloat(bondGen) > 0 ? parseEther(bondGen) : 0n;
 
-      const txHash = await sendContractTransaction({
+      txHash = await sendContractTransaction({
         address: CONTRACT_ADDRESS,
         functionName: 'file_infringement_claim',
         args: [vaultId, evidenceUrl],
@@ -418,7 +433,10 @@ export const App: React.FC = () => {
         txHash,
       });
 
-      await waitForTransactionReceipt(txHash);
+      const receipt = await waitForTransactionReceipt(txHash);
+      if (!receipt) {
+        throw new Error('Transaction confirmation timed out without validation receipt.');
+      }
 
       setTxNotice({
         type: 'success',
@@ -433,8 +451,8 @@ export const App: React.FC = () => {
       setTxNotice({
         type: 'error',
         message: err?.message || 'Failed to file infringement dispute.',
+        txHash,
       });
-      throw err;
     } finally {
       setActionLoading(false);
       setActiveActionVaultId(null);
@@ -450,6 +468,7 @@ export const App: React.FC = () => {
       return;
     }
 
+    let txHash: string | undefined;
     try {
       setActionLoading(true);
       setActiveActionVaultId(vaultId);
@@ -458,14 +477,17 @@ export const App: React.FC = () => {
         message: `Submitting licensee defense for vault ${vaultId}. Sign with MetaMask...`,
       });
 
-      const txHash = await sendContractTransaction({
+      txHash = await sendContractTransaction({
         address: CONTRACT_ADDRESS,
         functionName: 'submit_licensee_defense',
         args: [vaultId, defenseUrl, defenseStatement],
         from: account,
       });
 
-      await waitForTransactionReceipt(txHash);
+      const receipt = await waitForTransactionReceipt(txHash);
+      if (!receipt) {
+        throw new Error('Transaction confirmation timed out without validation receipt.');
+      }
 
       setTxNotice({
         type: 'success',
@@ -480,8 +502,8 @@ export const App: React.FC = () => {
       setTxNotice({
         type: 'error',
         message: err?.message || 'Failed to submit defense. Check contract version.',
+        txHash,
       });
-      throw err;
     } finally {
       setActionLoading(false);
       setActiveActionVaultId(null);
@@ -497,6 +519,7 @@ export const App: React.FC = () => {
       return;
     }
 
+    let txHash: string | undefined;
     try {
       setActionLoading(true);
       setActiveActionVaultId(vaultId);
@@ -505,14 +528,17 @@ export const App: React.FC = () => {
         message: `Conceding claim amicably for vault ${vaultId}...`,
       });
 
-      const txHash = await sendContractTransaction({
+      txHash = await sendContractTransaction({
         address: CONTRACT_ADDRESS,
         functionName: 'concede_claim',
         args: [vaultId],
         from: account,
       });
 
-      await waitForTransactionReceipt(txHash);
+      const receipt = await waitForTransactionReceipt(txHash);
+      if (!receipt) {
+        throw new Error('Transaction confirmation timed out without validation receipt.');
+      }
 
       setTxNotice({
         type: 'success',
@@ -527,6 +553,7 @@ export const App: React.FC = () => {
       setTxNotice({
         type: 'error',
         message: err?.message || 'Concession failed.',
+        txHash,
       });
     } finally {
       setActionLoading(false);
@@ -544,6 +571,7 @@ export const App: React.FC = () => {
       return;
     }
 
+    let txHash: string | undefined;
     try {
       setActionLoading(true);
       setActiveActionVaultId(vaultId);
@@ -552,7 +580,7 @@ export const App: React.FC = () => {
         message: `Convening on-chain AI Jury for vault ${vaultId}. Validators are scraping evidence and performing forensic analysis...`,
       });
 
-      const txHash = await sendContractTransaction({
+      txHash = await sendContractTransaction({
         address: CONTRACT_ADDRESS,
         functionName: 'adjudicate_infringement',
         args: [vaultId],
@@ -565,7 +593,10 @@ export const App: React.FC = () => {
         txHash,
       });
 
-      await waitForTransactionReceipt(txHash);
+      const receipt = await waitForTransactionReceipt(txHash);
+      if (!receipt) {
+        throw new Error('Transaction confirmation timed out without validation receipt.');
+      }
 
       setTxNotice({
         type: 'success',
@@ -580,6 +611,7 @@ export const App: React.FC = () => {
       setTxNotice({
         type: 'error',
         message: err?.message || 'Adjudication trial failed.',
+        txHash,
       });
     } finally {
       setActionLoading(false);
@@ -596,6 +628,7 @@ export const App: React.FC = () => {
       return;
     }
 
+    let txHash: string | undefined;
     try {
       setActionLoading(true);
       setActiveActionVaultId(vaultId);
@@ -604,14 +637,17 @@ export const App: React.FC = () => {
         message: `Initiating deposit refund for vault ${vaultId}...`,
       });
 
-      const txHash = await sendContractTransaction({
+      txHash = await sendContractTransaction({
         address: CONTRACT_ADDRESS,
         functionName: 'reclaim_deposit',
         args: [vaultId],
         from: account,
       });
 
-      await waitForTransactionReceipt(txHash);
+      const receipt = await waitForTransactionReceipt(txHash);
+      if (!receipt) {
+        throw new Error('Transaction confirmation timed out without validation receipt.');
+      }
 
       setTxNotice({
         type: 'success',
@@ -626,6 +662,7 @@ export const App: React.FC = () => {
       setTxNotice({
         type: 'error',
         message: err?.message || 'Deposit reclamation failed. Verify term expiration block.',
+        txHash,
       });
     } finally {
       setActionLoading(false);

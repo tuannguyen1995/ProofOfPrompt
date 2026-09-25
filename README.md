@@ -179,6 +179,16 @@ pytest tests/ -v
 - `test_clean_authorized_resets_split_proposer_and_dispute_fields`: Asserts `split_proposer = ZERO_ADDRESS` and clears dispute state upon claim dismissal.
 - `test_register_license_refunds_attached_value`: Asserts convenience wrapper refunds attached funds to avoid stranded capital.
 
+### 🚀 Live Deployment Full Lifecycle Verification:
+
+In addition to local unit tests, the complete **propose -> accept & fund -> duration expiry -> reclaim deposit** lifecycle has been executed on the live deployed contract [`0x7DdA9559C647de311e8D86f161f1D0DF264A9A22`](https://explorer-studio.genlayer.com/address/0x7DdA9559C647de311e8D86f161f1D0DF264A9A22) on Studionet.
+
+Run the automated live verification script:
+```bash
+python scripts/verify_reclaim_lifecycle.py
+```
+For individual transaction hashes, internal transfer emissions, and final on-chain state of vault `ip-4`, see [LIFECYCLE_VERIFICATION.md](LIFECYCLE_VERIFICATION.md).
+
 ---
 
 ## 🔒 Security & Best Practices

@@ -369,13 +369,14 @@ export async function sendContractTransaction(params: {
 
 /**
  * Polls for on-chain transaction receipt and verifies GenVM execution result on GenLayer Studionet.
- * Strictly verifies Return vs Contract Error to prevent false success reporting.
+ * Strictly verifies FINISHED_WITH_RETURN vs FINISHED_WITH_ERROR to prevent false success reporting.
+ * Throws an explicit error on timeout or revert — NEVER returns null.
  */
 export async function waitForTransactionReceipt(txHash: string, timeoutMs = 90000): Promise<any> {
   const startTime = Date.now();
   while (Date.now() - startTime < timeoutMs) {
     try {
-      // 1. Fetch full transaction details including GenVM consensus_data and leader_receipt
+      // 1. Fetch full transaction details including GenVM consensus_data, leader_receipt, and execution results
       const txRes = await fetch(STUDIONET_RPC_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -389,37 +390,85 @@ export async function waitForTransactionReceipt(txHash: string, timeoutMs = 9000
       const txJson = await txRes.json();
       const txData = txJson?.result;
 
-      if (txData && txData.consensus_data?.leader_receipt) {
-        const receipts = Array.isArray(txData.consensus_data.leader_receipt)
-          ? txData.consensus_data.leader_receipt
-          : [txData.consensus_data.leader_receipt];
-        const leader = receipts.find((r: any) => r.mode === 'leader') || receipts[0];
+      if (txData) {
+        // A. Check GenLayer top-level execution result enums: FINISHED_WITH_RETURN (1) vs FINISHED_WITH_ERROR (2)
+        const execResultName = String(txData.tx_execution_result_name || '').toUpperCase();
+        const execResultCode = String(txData.tx_execution_result ?? '');
+        const statusName = String(txData.status_name || '').toUpperCase();
+        const statusCode = String(txData.status ?? '');
 
-        if (leader) {
-          const execRes = leader.execution_result;
-          const status = leader.result?.status;
-          const isContractError =
-            execRes === 'ERROR' ||
-            status === 'contract_error' ||
-            leader.genvm_result?.error_description ||
-            (leader.genvm_result?.stderr && leader.genvm_result.stderr.includes('Traceback'));
+        // Check if transaction was canceled or undetermined
+        if (statusName === 'CANCELED' || statusCode === '8') {
+          throw new Error(`Transaction was canceled by GenLayer consensus (status: CANCELED).`);
+        }
+        if (statusName === 'UNDETERMINED' || statusCode === '6') {
+          throw new Error(`Transaction outcome undetermined by GenLayer validators (status: UNDETERMINED).`);
+        }
 
-          if (isContractError) {
-            const rawError =
-              leader.genvm_result?.error_description ||
-              leader.genvm_result?.stderr ||
-              leader.result?.payload ||
-              'Contract Error (Execution reverted in GenVM)';
-            throw new Error(`Transaction reverted on-chain: ${rawError}`);
+        // Direct check for FINISHED_WITH_ERROR
+        if (execResultName === 'FINISHED_WITH_ERROR' || execResultCode === '2') {
+          const rawError =
+            txData.genvm_result?.error_description ||
+            txData.genvm_result?.stderr ||
+            txData.error_description ||
+            'Contract execution reverted on GenVM (FINISHED_WITH_ERROR)';
+          throw new Error(`Transaction reverted on GenVM (FINISHED_WITH_ERROR): ${rawError}`);
+        }
+
+        // Direct check for FINISHED_WITH_RETURN
+        if (execResultName === 'FINISHED_WITH_RETURN' || execResultCode === '1') {
+          return txData;
+        }
+
+        // B. Inspect leader_receipt & validator consensus data
+        if (txData.consensus_data?.leader_receipt) {
+          const receipts = Array.isArray(txData.consensus_data.leader_receipt)
+            ? txData.consensus_data.leader_receipt
+            : [txData.consensus_data.leader_receipt];
+          const leader = receipts.find((r: any) => r.mode === 'leader') || receipts[0];
+
+          if (leader) {
+            const execRes = String(leader.execution_result || '').toUpperCase();
+            const status = String(leader.result?.status || '').toLowerCase();
+            const isFinishedWithError =
+              execRes === 'FINISHED_WITH_ERROR' ||
+              execRes === 'ERROR' ||
+              status === 'contract_error' ||
+              Boolean(leader.genvm_result?.error_description) ||
+              Boolean(leader.genvm_result?.stderr && leader.genvm_result.stderr.includes('Traceback'));
+
+            if (isFinishedWithError) {
+              const rawError =
+                leader.genvm_result?.error_description ||
+                leader.genvm_result?.stderr ||
+                leader.result?.payload ||
+                'Contract execution reverted on GenVM (FINISHED_WITH_ERROR)';
+              throw new Error(`Transaction reverted on GenVM (FINISHED_WITH_ERROR): ${rawError}`);
+            }
+
+            const isFinishedWithReturn =
+              execRes === 'FINISHED_WITH_RETURN' ||
+              (execRes === 'SUCCESS' && (status === 'return' || status === ''));
+
+            if (isFinishedWithReturn && (statusName === 'FINALIZED' || statusName === 'ACCEPTED' || statusCode === '7' || statusCode === '5')) {
+              return txData;
+            }
           }
+        }
 
-          if (execRes === 'SUCCESS' && (status === 'return' || status === undefined)) {
-            return txData;
+        // C. Also check validator votes if available
+        if (txData.consensus_data?.validators && Array.isArray(txData.consensus_data.validators)) {
+          for (const v of txData.consensus_data.validators) {
+            const vExec = String(v.execution_result || '').toUpperCase();
+            if (vExec === 'FINISHED_WITH_ERROR') {
+              const vErr = v.genvm_result?.error_description || v.genvm_result?.stderr || 'Validator reported FINISHED_WITH_ERROR';
+              throw new Error(`Transaction reverted on GenVM (FINISHED_WITH_ERROR): ${vErr}`);
+            }
           }
         }
       }
 
-      // 2. Check standard EVM receipt status
+      // 2. Check standard EVM receipt status as secondary verification
       const res = await fetch(STUDIONET_RPC_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -433,16 +482,23 @@ export async function waitForTransactionReceipt(txHash: string, timeoutMs = 9000
       const data = await res.json();
       if (data && data.result) {
         if (data.result.status === '0x0' || data.result.status === 0) {
-          throw new Error(`Transaction reverted on-chain (Tx: ${txHash})`);
+          throw new Error(`Transaction reverted on-chain with EVM status 0 (Tx: ${txHash})`);
         }
       }
     } catch (e: any) {
-      if (e?.message?.includes('reverted')) throw e;
+      if (e?.message?.includes('reverted') || e?.message?.includes('FINISHED_WITH_ERROR') || e?.message?.includes('canceled') || e?.message?.includes('undetermined')) {
+        throw e;
+      }
     }
 
     await new Promise((r) => setTimeout(r, 2000));
   }
-  return null;
+
+  // Timeout reached without confirmation: NEVER return null, throw explicit error!
+  throw new Error(
+    `Transaction confirmation timed out after ${Math.round(timeoutMs / 1000)}s. ` +
+    `Transaction ${txHash} was not confirmed as FINISHED_WITH_RETURN by GenLayer validators within the window.`
+  );
 }
 
 /**

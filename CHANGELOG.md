@@ -5,6 +5,12 @@ All notable changes to the **ProofOfPrompt** protocol and application are docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-09-25
+### Fixed & Hardened (Steward Zoefunds Follow-up Review)
+- **GenLayer Consensus-Level Status Enforcement (`FINISHED_WITH_RETURN` / `FINISHED_WITH_ERROR`):** Updated `waitForTransactionReceipt` in `frontend/src/config/genlayer.ts` to strictly inspect GenLayer's top-level execution result enums (`tx_execution_result_name` and `tx_execution_result`). Transactions returning `FINISHED_WITH_ERROR` immediately trigger descriptive exceptions.
+- **Eliminated False Green Success on Timeout:** `waitForTransactionReceipt` now strictly throws an explicit `Error` upon reaching timeout threshold rather than returning `null`. All action handlers in `App.tsx` capture errors and render persistent error notices (`type: 'error'`) with direct block explorer links.
+- **Executed & Verified Full Propose-Through-Reclaim Lifecycle On-Chain:** Created `scripts/verify_reclaim_lifecycle.py` and finalized an end-to-end propose-through-reclaim run on the active deployment `0x7DdA9559C647de311e8D86f161f1D0DF264A9A22` (Vault `ip-4`). Verified automatic collateral disbursement message on-chain and documented full receipts in `LIFECYCLE_VERIFICATION.md`.
+
 ## [1.2.0] - 2026-09-23
 ### Fixed & Hardened (Steward Review Refinements)
 - **Resolved `propose_license` Address Construction Error:** Replaced string zero address with `Address(bytes(20))` and introduced `_to_address()` coercion helper to prevent `AttributeError: 'str' object has no attribute 'as_bytes'` on storage write.

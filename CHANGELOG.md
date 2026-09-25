@@ -5,6 +5,12 @@ All notable changes to the **ProofOfPrompt** protocol and application are docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.3] - 2026-09-26
+### Fixed & Synchronized (Steward Zoefunds Review)
+- **Standardized Native Payout Engine:** Standardized `_pay_native` to invoke `gl.get_contract_at(recipient).emit_transfer(value=u256(int(amount)))`, guaranteeing native token payouts execute without GenVM runtime errors.
+- **String Split Proposer & Strict Address Coercion:** Transitioned `split_proposer` to `str` (initialized with `""`) and implemented `_to_address(addr)` coercion helper.
+- **Deployed Hardened Contract on Studionet:** Deployed and synchronized contract [`0x7078594e4CE26A4A0E7970C150e4ee56d381F640`](https://explorer-studio.genlayer.com/address/0x7078594e4CE26A4A0E7970C150e4ee56d381F640).
+
 ## [1.2.2] - 2026-09-25
 ### Synchronized
 - **Deployed Fresh Contract on Studionet:** Deployed and synchronized contract [`0x04E7B231331179895659B6D70E6b4F14d5B63ee7`](https://explorer-studio.genlayer.com/address/0x04E7B231331179895659B6D70E6b4F14d5B63ee7) with zero-address fixes and strict Address coercion.

@@ -2,7 +2,7 @@
 
 > **Track:** Subjective Consensus / AI Governance / Future of Work  
 > **Target Network:** GenLayer Studionet (Chain ID: `61999` / `0xF1EF`, RPC: `https://studio.genlayer.com/api`)  
-> **Deployed Contract:** `0x7DdA9559C647de311e8D86f161f1D0DF264A9A22`  
+> **Deployed Contract:** `0x04E7B231331179895659B6D70E6b4F14d5B63ee7`  
 > **Live App (Vercel):** [https://proofofprompt.vercel.app](https://proofofprompt.vercel.app)  
 > **GitHub Repository:** [https://github.com/tuannguyen1995/ProofOfPrompt](https://github.com/tuannguyen1995/ProofOfPrompt)  
 > **UI Aesthetic:** Minimal Bauhaus & Gallery Art (`#F7F5F0` canvas, razor-thin `#E2DED4` borders, Syne / Space Grotesk typography, Ultramarine Blue `#1D4ED8`)
@@ -147,7 +147,7 @@ ProofOfPrompt/
 
 ---
 
-> **Explorer:** [https://explorer-studio.genlayer.com/address/0x7DdA9559C647de311e8D86f161f1D0DF264A9A22](https://explorer-studio.genlayer.com/address/0x7DdA9559C647de311e8D86f161f1D0DF264A9A22)  
+> **Explorer:** [https://explorer-studio.genlayer.com/address/0x04E7B231331179895659B6D70E6b4F14d5B63ee7](https://explorer-studio.genlayer.com/address/0x04E7B231331179895659B6D70E6b4F14d5B63ee7)  
 
 ---
 
@@ -182,13 +182,13 @@ pytest tests/ -v
 
 ### 🚀 Live Deployment Full Lifecycle Verification:
 
-In addition to local unit tests, the complete **propose -> accept & fund -> duration expiry -> reclaim deposit** lifecycle has been executed on the live deployed contract [`0x7DdA9559C647de311e8D86f161f1D0DF264A9A22`](https://explorer-studio.genlayer.com/address/0x7DdA9559C647de311e8D86f161f1D0DF264A9A22) on Studionet.
+In addition to local unit tests, the complete **propose -> accept & fund -> duration expiry -> reclaim deposit** lifecycle has been executed on the live deployed contract [`0x04E7B231331179895659B6D70E6b4F14d5B63ee7`](https://explorer-studio.genlayer.com/address/0x04E7B231331179895659B6D70E6b4F14d5B63ee7) on Studionet.
 
 Run the automated live verification script:
 ```bash
 python scripts/verify_reclaim_lifecycle.py
 ```
-For individual transaction hashes, internal transfer emissions, and final on-chain state of vault `ip-4`, see [LIFECYCLE_VERIFICATION.md](LIFECYCLE_VERIFICATION.md).
+For individual transaction hashes, internal transfer emissions, and final on-chain state of vault `ip-2`, see [LIFECYCLE_VERIFICATION.md](LIFECYCLE_VERIFICATION.md).
 
 ---
 

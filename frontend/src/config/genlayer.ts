@@ -1,7 +1,7 @@
 import { defineChain, toRlp, encodeAbiParameters, parseAbiParameters } from 'viem';
 
 // Target Contract on Studionet
-export const CONTRACT_ADDRESS = (import.meta.env.VITE_CONTRACT_ADDRESS || '0x7DdA9559C647de311e8D86f161f1D0DF264A9A22') as `0x${string}`;
+export const CONTRACT_ADDRESS = (import.meta.env.VITE_CONTRACT_ADDRESS || '0x04E7B231331179895659B6D70E6b4F14d5B63ee7') as `0x${string}`;
 
 // Studionet Chain Definition (Chain ID: 61999 = 0xF1EF)
 export const studionet = defineChain({

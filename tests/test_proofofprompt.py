@@ -568,8 +568,8 @@ def test_clean_authorized_resets_split_proposer_and_dispute_fields(direct_deploy
     vault_after = json.loads(contract.get_vault("ip-1"))
     assert vault_after["status"] == 1  # STATUS_ACTIVE
     assert vault_after["verdict"] == "CLEAN_AUTHORIZED"
-    # split_proposer must be reset to zero address
-    assert vault_after["split_proposer"] == "0x0000000000000000000000000000000000000000"
+    # split_proposer must be reset / cleared
+    assert vault_after["split_proposer"] in ("", "0x0000000000000000000000000000000000000000")
     # dispute fields must be cleared
     assert vault_after["infringement_url"] == ""
     assert vault_after["defense_url"] == ""

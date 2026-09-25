@@ -596,3 +596,51 @@ def test_register_license_refunds_attached_value(direct_deploy, direct_vm, direc
     assert int(vault["required_deposit"]) == 2_000_000_000_000_000_000
     assert int(vault["escrow_deposit"]) == 0
 
+
+def test_full_propose_through_reclaim_lifecycle(direct_deploy, direct_vm, direct_alice, direct_bob):
+    """Test the complete 4-step propose-through-reclaim lifecycle cleanly on GenVM."""
+    creator = direct_alice
+    licensee = direct_bob
+
+    direct_vm.sender = creator
+    contract = direct_deploy(str(CONTRACT_PATH))
+    import sys
+    Address = sys.modules["genlayer"].Address
+
+    deposit = 1_500_000_000_000_000_000
+    duration_seconds = 86400 * 14  # 14 days
+
+    # Stage 1: Propose
+    vault_id = contract.propose_license(Address(licensee), "Complete Lifecycle DNA", deposit, duration_seconds)
+    assert vault_id == "ip-1"
+    vault = json.loads(contract.get_vault("ip-1"))
+    assert vault["status"] == 0  # STATUS_OFFERED
+
+    # Stage 2: Accept and Fund
+    direct_vm.sender = licensee
+    direct_vm.value = deposit
+    contract.accept_and_fund_license("ip-1")
+    vault = json.loads(contract.get_vault("ip-1"))
+    assert vault["status"] == 1  # STATUS_ACTIVE
+    assert int(vault["escrow_deposit"]) == deposit
+
+    # Before expiration, reclaim is blocked
+    with pytest.raises(Exception, match="has not yet expired"):
+        contract.reclaim_deposit("ip-1")
+
+    # Stage 3: Advance time past license expiration
+    import datetime
+    now_dt = datetime.datetime.fromisoformat(direct_vm._datetime.replace("Z", "+00:00"))
+    future_dt = now_dt + datetime.timedelta(seconds=duration_seconds + 3600)
+    direct_vm.warp(future_dt.isoformat().replace("+00:00", "Z"))
+
+    # Stage 4: Reclaim deposit upon term expiration
+    direct_vm.sender = licensee
+    direct_vm.value = 0
+    contract.reclaim_deposit("ip-1")
+
+    vault_final = json.loads(contract.get_vault("ip-1"))
+    assert vault_final["status"] == 8  # STATUS_EXPIRED_REFUNDED
+    assert vault_final["verdict"] == "CLEAN_EXPIRED"
+
+

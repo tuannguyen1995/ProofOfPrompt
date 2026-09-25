@@ -163,7 +163,7 @@ pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-### Covered Test Scenarios (14/14 Passing via GenVM Direct Execution):
+### Covered Test Scenarios (15/15 Passing via GenVM Direct Execution):
 - `test_propose_and_accept_license_flow`: Validates two-sided proposal, licensee rejection of strangers, and independent collateral funding.
 - `test_mandatory_claim_bond_enforcement`: Verifies creator must stake >=10% dispute bond.
 - `test_enforced_defense_window_blocks_immediate_trial`: Enforces 24-hour defense window locking premature trials.
@@ -178,6 +178,7 @@ pytest tests/ -v
 - `test_reclaim_stalled_audit_refunds_both_deposit_and_bond`: Validates safety timeout refund if audit stalls past 3 days.
 - `test_clean_authorized_resets_split_proposer_and_dispute_fields`: Asserts `split_proposer = ZERO_ADDRESS` and clears dispute state upon claim dismissal.
 - `test_register_license_refunds_attached_value`: Asserts convenience wrapper refunds attached funds to avoid stranded capital.
+- `test_full_propose_through_reclaim_lifecycle`: Verifies complete 4-stage end-to-end propose-through-reclaim flow on GenVM.
 
 ### 🚀 Live Deployment Full Lifecycle Verification:
 

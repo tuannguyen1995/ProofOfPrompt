@@ -227,6 +227,50 @@ export const App: React.FC = () => {
     }
   }, [fetchContractData]);
 
+/**
+ * Asserts that a transaction finished with GenLayer's FINISHED_WITH_RETURN status.
+ * Rejects FINISHED_WITH_ERROR, reverted status, or unfinalized timeouts to prevent false green notices.
+ */
+function assertFinishedWithReturn(receipt: any, actionName: string) {
+  if (!receipt) {
+    throw new Error(`${actionName} failed: Transaction confirmation timed out without finalized consensus receipt.`);
+  }
+
+  // Check top-level consensus execution results
+  const execResult = String(receipt.tx_execution_result_name || '').toUpperCase();
+  const leaderExec = String(receipt.consensus_data?.leader_receipt?.[0]?.execution_result || '').toUpperCase();
+  const leaderStatus = String(receipt.consensus_data?.leader_receipt?.[0]?.result?.status || '').toLowerCase();
+
+  if (
+    execResult === 'FINISHED_WITH_ERROR' ||
+    leaderExec === 'FINISHED_WITH_ERROR' ||
+    leaderExec === 'ERROR' ||
+    leaderStatus === 'contract_error'
+  ) {
+    const errorMsg =
+      receipt.genvm_result?.error_description ||
+      receipt.consensus_data?.leader_receipt?.[0]?.genvm_result?.error_description ||
+      receipt.consensus_data?.leader_receipt?.[0]?.genvm_result?.stderr ||
+      'Contract execution reverted on GenVM (FINISHED_WITH_ERROR)';
+    throw new Error(`Transaction reverted on-chain (FINISHED_WITH_ERROR): ${errorMsg}`);
+  }
+
+  const isSuccess =
+    execResult === 'FINISHED_WITH_RETURN' ||
+    leaderExec === 'FINISHED_WITH_RETURN' ||
+    (leaderExec === 'SUCCESS' && (leaderStatus === 'return' || leaderStatus === '')) ||
+    receipt.status_name === 'FINALIZED' ||
+    receipt.status_name === 'ACCEPTED' ||
+    String(receipt.status) === '7' ||
+    String(receipt.status) === '5';
+
+  if (!isSuccess) {
+    throw new Error(`${actionName} failed: Transaction did not reach FINISHED_WITH_RETURN consensus.`);
+  }
+
+  return receipt;
+}
+
   /**
    * Action 1: Propose new IP license terms (Creator locks 0 deposit; sets required collateral)
    */
@@ -266,9 +310,7 @@ export const App: React.FC = () => {
       });
 
       const receipt = await waitForTransactionReceipt(txHash);
-      if (!receipt) {
-        throw new Error('Transaction confirmation timed out without validation receipt.');
-      }
+      assertFinishedWithReturn(receipt, 'License proposal');
 
       setTxNotice({
         type: 'success',
@@ -323,9 +365,7 @@ export const App: React.FC = () => {
       });
 
       const receipt = await waitForTransactionReceipt(txHash);
-      if (!receipt) {
-        throw new Error('Transaction confirmation timed out without validation receipt.');
-      }
+      assertFinishedWithReturn(receipt, 'License acceptance');
 
       setTxNotice({
         type: 'success',
@@ -374,9 +414,7 @@ export const App: React.FC = () => {
       });
 
       const receipt = await waitForTransactionReceipt(txHash);
-      if (!receipt) {
-        throw new Error('Transaction confirmation timed out without validation receipt.');
-      }
+      assertFinishedWithReturn(receipt, 'Mutual split proposal');
 
       setTxNotice({
         type: 'success',
@@ -434,9 +472,7 @@ export const App: React.FC = () => {
       });
 
       const receipt = await waitForTransactionReceipt(txHash);
-      if (!receipt) {
-        throw new Error('Transaction confirmation timed out without validation receipt.');
-      }
+      assertFinishedWithReturn(receipt, 'Dispute filing');
 
       setTxNotice({
         type: 'success',
@@ -485,9 +521,7 @@ export const App: React.FC = () => {
       });
 
       const receipt = await waitForTransactionReceipt(txHash);
-      if (!receipt) {
-        throw new Error('Transaction confirmation timed out without validation receipt.');
-      }
+      assertFinishedWithReturn(receipt, 'Defense registration');
 
       setTxNotice({
         type: 'success',
@@ -536,9 +570,7 @@ export const App: React.FC = () => {
       });
 
       const receipt = await waitForTransactionReceipt(txHash);
-      if (!receipt) {
-        throw new Error('Transaction confirmation timed out without validation receipt.');
-      }
+      assertFinishedWithReturn(receipt, 'Claim concession');
 
       setTxNotice({
         type: 'success',
@@ -594,9 +626,7 @@ export const App: React.FC = () => {
       });
 
       const receipt = await waitForTransactionReceipt(txHash);
-      if (!receipt) {
-        throw new Error('Transaction confirmation timed out without validation receipt.');
-      }
+      assertFinishedWithReturn(receipt, 'Jury adjudication');
 
       setTxNotice({
         type: 'success',
@@ -645,9 +675,7 @@ export const App: React.FC = () => {
       });
 
       const receipt = await waitForTransactionReceipt(txHash);
-      if (!receipt) {
-        throw new Error('Transaction confirmation timed out without validation receipt.');
-      }
+      assertFinishedWithReturn(receipt, 'Deposit reclamation');
 
       setTxNotice({
         type: 'success',

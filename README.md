@@ -2,7 +2,7 @@
 
 > **Track:** Subjective Consensus / AI Governance / Future of Work  
 > **Target Network:** GenLayer Studionet (Chain ID: `61999` / `0xF1EF`, RPC: `https://studio.genlayer.com/api`)  
-> **Deployed Contract:** `0x7078594e4CE26A4A0E7970C150e4ee56d381F640`  
+> **Deployed Contract:** `0x985d0162B38Fa33e753DD9487A6212bB381814fc`  
 > **Live App (Vercel):** [https://proofofprompt.vercel.app](https://proofofprompt.vercel.app)  
 > **GitHub Repository:** [https://github.com/tuannguyen1995/ProofOfPrompt](https://github.com/tuannguyen1995/ProofOfPrompt)  
 > **UI Aesthetic:** Minimal Bauhaus & Gallery Art (`#F7F5F0` canvas, razor-thin `#E2DED4` borders, Syne / Space Grotesk typography, Ultramarine Blue `#1D4ED8`)
@@ -182,7 +182,7 @@ pytest tests/ -v
 
 ### 🚀 Live Deployment Full Lifecycle Verification:
 
-In addition to local unit tests, the complete **propose -> accept & fund -> duration expiry -> reclaim deposit** lifecycle has been executed on the live deployed contract [`0x7078594e4CE26A4A0E7970C150e4ee56d381F640`](https://explorer-studio.genlayer.com/address/0x7078594e4CE26A4A0E7970C150e4ee56d381F640) on Studionet.
+In addition to local unit tests, the complete **propose -> accept & fund -> duration expiry -> reclaim deposit** lifecycle has been executed on the live deployed contract [`0x985d0162B38Fa33e753DD9487A6212bB381814fc`](https://explorer-studio.genlayer.com/address/0x985d0162B38Fa33e753DD9487A6212bB381814fc) on Studionet.
 
 Run the automated live verification script:
 ```bash

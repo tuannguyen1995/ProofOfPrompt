@@ -5,6 +5,14 @@ All notable changes to the **ProofOfPrompt** protocol and application are docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.4] - 2026-09-30
+### Fixed & Synchronized (Full Safeguards & Production Deployment)
+- **Eliminated Top-Level gl Monkeypatching:** Removed `if not hasattr(gl, "UserError")` monkeypatching to safeguard GenVM Studio schema parser.
+- **Removed Legacy One-Sided Wrapper:** Completely removed `register_license` from contract to enforce purely two-sided workflows (`propose_license` + `accept_and_fund_license`).
+- **Resilient Deterministic Time Fallback:** Enhanced `_now()` with layered fallback (runtime `datetime` -> `message.timestamp` -> monotonic progression) ensuring execution never stalls.
+- **Deployed Fresh Contract on Studionet:** Deployed and synchronized contract [`0x985d0162B38Fa33e753DD9487A6212bB381814fc`](https://explorer-studio.genlayer.com/address/0x985d0162B38Fa33e753DD9487A6212bB381814fc) created by deployer `0x36CBA5d4d4D0A2DC6D57E81d8E82385A08C8aD36`.
+- **Seeded Multi-Party Vaults & Lifecycle Verification:** Seeded `ip-1` (two-sided dispute and defense) and executed `ip-2` full propose-fund-reclaim lifecycle cleanly with native payout.
+
 ## [1.2.3] - 2026-09-26
 ### Fixed & Synchronized (Steward Zoefunds Review)
 - **Standardized Native Payout Engine:** Standardized `_pay_native` to invoke `gl.get_contract_at(recipient).emit_transfer(value=u256(int(amount)))`, guaranteeing native token payouts execute without GenVM runtime errors.

@@ -577,17 +577,19 @@ def test_clean_authorized_resets_split_proposer_and_dispute_fields(direct_deploy
     assert int(vault_after["defense_deadline"]) == 0
 
 
-def test_register_license_refunds_attached_value(direct_deploy, direct_vm, direct_alice, direct_bob):
-    """Test that register_license refunds attached msg.value so funds are never stranded."""
+def test_propose_license_enforces_zero_initial_deposit(direct_deploy, direct_vm, direct_alice, direct_bob):
+    """Test that propose_license creates terms with 0 locked deposit, exclusively awaiting licensee funding."""
     creator = direct_alice
     licensee = direct_bob
 
     direct_vm.sender = creator
     contract = direct_deploy(str(CONTRACT_PATH))
+    import sys
+    Address = sys.modules["genlayer"].Address
 
-    # Creator calls register_license attaching 2 GEN
-    direct_vm.value = 2_000_000_000_000_000_000
-    vault_id = contract.register_license(licensee, "DNA Spec", 86400 * 30)
+    # Creator proposes license without any collateral deposit
+    direct_vm.value = 0
+    vault_id = contract.propose_license(Address(licensee), "DNA Spec 101", 2_000_000_000_000_000_000, 86400 * 30)
     assert vault_id == "ip-1"
 
     # Vault requires 2 GEN collateral from licensee, but contract holds 0 locked deposit until funded
@@ -595,6 +597,7 @@ def test_register_license_refunds_attached_value(direct_deploy, direct_vm, direc
     assert vault["status"] == 0  # STATUS_OFFERED
     assert int(vault["required_deposit"]) == 2_000_000_000_000_000_000
     assert int(vault["escrow_deposit"]) == 0
+    assert vault["verdict"] == "AWAITING_LICENSEE_FUNDING"
 
 
 def test_full_propose_through_reclaim_lifecycle(direct_deploy, direct_vm, direct_alice, direct_bob):

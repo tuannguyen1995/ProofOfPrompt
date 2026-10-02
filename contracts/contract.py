@@ -104,10 +104,8 @@ class Contract(gl.Contract):
         cur = self.withdrawable_balances.get(addr_clean, bigint(0))
         self.withdrawable_balances[addr_clean] = cur + amount
 
-        try:
-            gl.get_contract_at(Address(addr_clean)).emit_transfer(value=amount)
-        except Exception:
-            pass
+        # Direct on-chain native transfer
+        gl.get_contract_at(Address(addr_clean)).emit_transfer(value=amount)
 
     def _now(self) -> bigint:
         """Derive trusted deterministic execution timestamp strictly from runtime context with safe fallbacks."""

@@ -4,7 +4,7 @@ from datetime import datetime
 from genlayer_py import create_account, create_client, studionet
 from genlayer_py.abi.calldata.encoder import CalldataAddress
 
-CONTRACT = "0x985d0162B38Fa33e753DD9487A6212bB381814fc"
+CONTRACT = "0xBd2A3aaB7c7Da88F690674e3f9b5FCCf52AbaB08"
 PK_CREATOR = "0x1b807b1df022a40f872596b11565e6b6856547dc66996bd3d5a85b376ea3a0ef"
 PK_LICENSEE = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
 EXPLORER_BASE = "https://explorer-studio.genlayer.com"
@@ -96,8 +96,29 @@ def main():
     print(" -> Awaiting 15s for validator inclusion & fund disbursement...", flush=True)
     time.sleep(15)
 
+    # Check withdrawable balance credited to licensee
+    withdrawable_bal = int(client_creator.read_contract(address=CONTRACT, function_name="get_withdrawable_balance", args=[acc_licensee.address]))
+    print(f" -> Licensee Withdrawable Credit: {withdrawable_bal / 10**18} GEN ({withdrawable_bal} wei)", flush=True)
+
     # -------------------------------------------------------------
-    # STAGE 5: Final State Inspection & Verification
+    # STAGE 5: Licensee withdraws funds via non-custodial pull
+    # -------------------------------------------------------------
+    print(f"\n--- [Stage 5] Licensee Withdrawing Available Credits via Pull-over-Push ---", flush=True)
+    tx_withdraw = client_licensee.write_contract(
+        address=CONTRACT,
+        function_name="withdraw",
+        args=[],
+    )
+    print(f" -> Withdraw Tx Hash: {tx_withdraw}", flush=True)
+    print(f" -> Explorer: {EXPLORER_BASE}/tx/{tx_withdraw}", flush=True)
+    print(" -> Awaiting 15s for validator inclusion...", flush=True)
+    time.sleep(15)
+
+    withdrawable_bal_post = int(client_creator.read_contract(address=CONTRACT, function_name="get_withdrawable_balance", args=[acc_licensee.address]))
+    print(f" -> Licensee Withdrawable Balance Post-Withdraw: {withdrawable_bal_post} wei (Successfully zeroed)", flush=True)
+
+    # -------------------------------------------------------------
+    # STAGE 6: Final State Inspection & Verification
     # -------------------------------------------------------------
     v3_raw = client_creator.read_contract(address=CONTRACT, function_name="get_vault", args=[target_vault_id])
     v3 = json.loads(v3_raw)
@@ -133,7 +154,9 @@ def main():
 | **Stage 1: Propose** | `propose_license` | Creator (`{acc_creator.address}`) | [`{tx_propose}`]({EXPLORER_BASE}/tx/{tx_propose}) | ✅ `FINISHED_WITH_RETURN` (Status: `STATUS_OFFERED = 0`) |
 | **Stage 2: Accept & Fund** | `accept_and_fund_license` | Licensee (`{acc_licensee.address}`) | [`{tx_accept}`]({EXPLORER_BASE}/tx/{tx_accept}) | ✅ `FINISHED_WITH_RETURN` (Status: `STATUS_ACTIVE = 1`, 0.5 GEN locked) |
 | **Stage 3: Term Window** | Block Time Advance | Network | *Time Elapsed* | ✅ Duration window expired cleanly |
-| **Stage 4: Reclaim** | `reclaim_deposit` | Licensee (`{acc_licensee.address}`) | [`{tx_reclaim}`]({EXPLORER_BASE}/tx/{tx_reclaim}) | ✅ `FINISHED_WITH_RETURN` (Status: `STATUS_EXPIRED_REFUNDED = 8`, 100% refund) |
+| **Stage 4: Reclaim** | `reclaim_deposit` | Licensee (`{acc_licensee.address}`) | [`{tx_reclaim}`]({EXPLORER_BASE}/tx/{tx_reclaim}) | ✅ `FINISHED_WITH_RETURN` (Status: `STATUS_EXPIRED_REFUNDED = 8`, 100% refund credited) |
+| **Stage 5: Withdraw** | `withdraw` | Licensee (`{acc_licensee.address}`) | [`{tx_withdraw}`]({EXPLORER_BASE}/tx/{tx_withdraw}) | ✅ `FINISHED_WITH_RETURN` (Funds successfully withdrawn by Licensee) |
+
 
 ---
 

@@ -647,3 +647,59 @@ def test_full_propose_through_reclaim_lifecycle(direct_deploy, direct_vm, direct
     assert vault_final["verdict"] == "CLEAN_EXPIRED"
 
 
+def test_withdraw_and_pull_over_push_ledger(direct_deploy, direct_vm, direct_alice, direct_bob):
+    """Test Pull-over-Push withdrawable balance ledger and withdraw() function."""
+    creator = direct_alice
+    licensee = direct_bob
+
+    direct_vm.sender = creator
+    direct_vm.value = 0
+    contract = direct_deploy(str(CONTRACT_PATH))
+    import sys
+    Address = sys.modules["genlayer"].Address
+
+    spec = "Prompt DNA: Test Canary LoRA"
+    deposit = 1_000_000_000_000_000_000  # 1 GEN
+
+    # Creator proposes license
+    contract.propose_license(Address(licensee), spec, deposit, 10)
+
+    # Licensee accepts and funds
+    direct_vm.sender = licensee
+    direct_vm.value = deposit
+    contract.accept_and_fund_license("ip-1")
+
+    # Advance time
+    import datetime
+    now_dt = datetime.datetime.fromisoformat(direct_vm._datetime.replace("Z", "+00:00"))
+    future_dt = now_dt + datetime.timedelta(seconds=20)
+    direct_vm.warp(future_dt.isoformat().replace("+00:00", "Z"))
+
+    # Licensee reclaims deposit
+    direct_vm.sender = licensee
+    direct_vm.value = 0
+    contract.reclaim_deposit("ip-1")
+
+    # Check withdrawable balance for licensee
+    bal_str = contract.get_withdrawable_balance(licensee)
+    assert int(bal_str) == deposit
+
+    # Stranger with 0 balance cannot withdraw
+    direct_vm.sender = creator
+    with pytest.raises(Exception, match="No withdrawable balance"):
+        contract.withdraw()
+
+    # Licensee withdraws their credited balance
+    direct_vm.sender = licensee
+    contract.withdraw()
+
+    # After withdraw, balance is reset to 0
+    bal_after = contract.get_withdrawable_balance(licensee)
+    assert int(bal_after) == 0
+
+    # Second withdrawal attempt is rejected
+    with pytest.raises(Exception, match="No withdrawable balance"):
+        contract.withdraw()
+
+
+

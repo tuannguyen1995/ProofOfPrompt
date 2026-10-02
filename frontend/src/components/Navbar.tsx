@@ -1,33 +1,60 @@
-import React from 'react';
-import { ShieldCheck, Wallet, ExternalLink, RefreshCw, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, Wallet, ExternalLink, RefreshCw, AlertTriangle, Download } from 'lucide-react';
 import { shortenAddress, formatGen, getExplorerAddressUrl } from '../utils/helpers';
 import { CONTRACT_ADDRESS } from '../config/genlayer';
 
 interface NavbarProps {
   account: `0x${string}` | null;
   balance: bigint | null;
+  withdrawableBalance?: bigint | null;
   isConnecting: boolean;
   onConnect: () => Promise<void>;
   onRefresh: () => void;
   isRefreshing: boolean;
   onFaucet?: () => Promise<void>;
   isFauceting?: boolean;
+  onWithdraw?: () => Promise<void>;
+  isWithdrawing?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   account,
   balance,
+  withdrawableBalance,
   isConnecting,
   onConnect,
   onRefresh,
   isRefreshing,
   onFaucet,
   isFauceting,
+  onWithdraw,
+  isWithdrawing,
 }) => {
   const isZeroBalance = account && balance !== null && balance === 0n;
+  const hasWithdrawable = account && withdrawableBalance !== undefined && withdrawableBalance !== null && withdrawableBalance > 0n;
 
   return (
     <header className="border-b border-linen-300 bg-card sticky top-0 z-40">
+      {/* Withdrawable Credit Available Banner */}
+      {hasWithdrawable && (
+        <div className="bg-emerald-50 border-b border-emerald-200 px-4 py-2 text-xs text-emerald-800 flex items-center justify-between">
+          <div className="flex items-center space-x-2 max-w-7xl mx-auto w-full justify-between">
+            <div className="flex items-center space-x-2">
+              <span className="font-semibold">💰 Available Vault Credit:</span>
+              <span>You have <strong>{formatGen(withdrawableBalance!)}</strong> ready to withdraw to your wallet!</span>
+            </div>
+            {onWithdraw && (
+              <button
+                onClick={onWithdraw}
+                disabled={isWithdrawing}
+                className="px-3 py-1 font-semibold text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded shadow-sm disabled:opacity-50 transition-colors flex items-center space-x-1"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>{isWithdrawing ? 'Withdrawing...' : 'Claim / Withdraw Now'}</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {/* Studio Funding Notice Banner if balance is 0 */}
       {isZeroBalance && (
         <div className="bg-amber-light border-b border-amber-border px-4 py-2 text-xs text-amber flex items-center justify-between">
@@ -99,6 +126,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Connect / Account state */}
           {account ? (
             <div className="flex items-center space-x-2">
+              {onWithdraw && hasWithdrawable && (
+                <button
+                  onClick={onWithdraw}
+                  disabled={isWithdrawing}
+                  title="Claim withdrawable credits from contract"
+                  className="px-2.5 py-1 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded shadow-sm disabled:opacity-50 transition-colors flex items-center space-x-1"
+                >
+                  <Download className="w-3 h-3" />
+                  <span>{isWithdrawing ? 'Claiming...' : `Claim ${formatGen(withdrawableBalance!)}`}</span>
+                </button>
+              )}
               {onFaucet && (
                 <button
                   onClick={onFaucet}

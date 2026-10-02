@@ -44,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.1.0] - 2026-09-19
 ### Added
-- **Synchronized Deployed Contract Address:** `0xFef901554A09048ebB11bad41B1Fe68ef3951241` on GenLayer Studionet.
+- **Synchronized Deployed Contract Address:** `0xBd2A3aaB7c7Da88F690674e3f9b5FCCf52AbaB08` on GenLayer Studionet.
 - **Two-Sided Justice Architecture:**
   - **Creator Anti-Harassment Dispute Bond:** Requires creators to stake a bond when initiating a dispute; forfeited to the licensee if the claim is frivolous/clean.
   - **Licensee Right of Defense (`SubmitDefense` modal):** Licensees can submit a rebuttal defense statement and counter-evidence URL prior to jury trial.

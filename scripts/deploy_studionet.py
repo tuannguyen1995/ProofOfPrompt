@@ -147,6 +147,15 @@ def deploy():
             f.write(cc)
         print(f"[+] Updated scripts/complete_task_trial.py with {contract_address}")
 
+    reclaim_script = Path(__file__).parent.parent / "scripts" / "verify_reclaim_lifecycle.py"
+    if reclaim_script.exists():
+        with open(reclaim_script, "r", encoding="utf-8") as f:
+            rc = f.read()
+        rc = re.sub(r'CONTRACT = "0x[0-9a-fA-F]+"', f'CONTRACT = "{contract_address}"', rc)
+        with open(reclaim_script, "w", encoding="utf-8") as f:
+            f.write(rc)
+        print(f"[+] Updated scripts/verify_reclaim_lifecycle.py with {contract_address}")
+
     return contract_address
 
 if __name__ == "__main__":

@@ -647,8 +647,8 @@ def test_full_propose_through_reclaim_lifecycle(direct_deploy, direct_vm, direct
     assert vault_final["verdict"] == "CLEAN_EXPIRED"
 
 
-def test_withdraw_and_pull_over_push_ledger(direct_deploy, direct_vm, direct_alice, direct_bob):
-    """Test Pull-over-Push withdrawable balance ledger and withdraw() function."""
+def test_single_direct_payout_no_duplicate_claim(direct_deploy, direct_vm, direct_alice, direct_bob):
+    """Test that settlements directly disburse funds without duplicate withdrawable ledger claims."""
     creator = direct_alice
     licensee = direct_bob
 
@@ -669,37 +669,30 @@ def test_withdraw_and_pull_over_push_ledger(direct_deploy, direct_vm, direct_ali
     direct_vm.value = deposit
     contract.accept_and_fund_license("ip-1")
 
+    stats = json.loads(contract.get_stats())
+    assert int(stats["total_deposit_locked"]) == deposit
+
     # Advance time
     import datetime
     now_dt = datetime.datetime.fromisoformat(direct_vm._datetime.replace("Z", "+00:00"))
     future_dt = now_dt + datetime.timedelta(seconds=20)
     direct_vm.warp(future_dt.isoformat().replace("+00:00", "Z"))
 
-    # Licensee reclaims deposit
+    # Licensee reclaims deposit directly to wallet
     direct_vm.sender = licensee
     direct_vm.value = 0
     contract.reclaim_deposit("ip-1")
 
-    # Check withdrawable balance for licensee
-    bal_str = contract.get_withdrawable_balance(licensee)
-    assert int(bal_str) == deposit
+    vault = json.loads(contract.get_vault("ip-1"))
+    assert vault["status"] == 8
+    assert vault["verdict"] == "CLEAN_EXPIRED"
 
-    # Stranger with 0 balance cannot withdraw
-    direct_vm.sender = creator
-    with pytest.raises(Exception, match="No withdrawable balance"):
-        contract.withdraw()
+    stats_after = json.loads(contract.get_stats())
+    assert int(stats_after["total_deposit_locked"]) == 0
 
-    # Licensee withdraws their credited balance
-    direct_vm.sender = licensee
-    contract.withdraw()
-
-    # After withdraw, balance is reset to 0
-    bal_after = contract.get_withdrawable_balance(licensee)
-    assert int(bal_after) == 0
-
-    # Second withdrawal attempt is rejected
-    with pytest.raises(Exception, match="No withdrawable balance"):
-        contract.withdraw()
+    # Verify no withdrawable balances or duplicate claims exist on contract schema
+    assert not hasattr(contract, "withdraw")
+    assert not hasattr(contract, "get_withdrawable_balance")
 
 
 

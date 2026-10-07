@@ -26,6 +26,12 @@ def _to_address(addr) -> Address:
     return Address(addr_str)
 
 
+def _pay_native(recipient, amount: bigint) -> None:
+    """Send native GEN tokens directly to an address via GenLayer transfer."""
+    if amount <= bigint(0):
+        return
+    addr = _to_address(recipient)
+    gl.get_contract_at(addr).emit_transfer(value=amount)
 
 
 # --- Protocol Status Lifecycle ---
@@ -80,7 +86,6 @@ class Contract(gl.Contract):
     """
     vaults: TreeMap[str, LicenseVault]
     vault_ids: DynArray[str]
-    withdrawable_balances: TreeMap[str, bigint]
     total_deposit_locked: bigint
     total_disputes_resolved: u32
     vault_counter: u64
@@ -90,22 +95,6 @@ class Contract(gl.Contract):
         self.total_deposit_locked = bigint(0)
         self.total_disputes_resolved = u32(0)
         self.vault_counter = u64(0)
-
-    def _safe_transfer(self, to_addr, amount: bigint) -> None:
-        """Safely disburse native GEN tokens using Pull-over-Push ledger with canonical bigint transfer.
-        
-        Credits the beneficiary's withdrawable ledger balance first so funds are
-        permanently claimable even if direct EOA message delivery encounters a node routing
-        exception. Also attempts direct emit_transfer using canonical bigint.
-        """
-        if amount <= bigint(0):
-            return
-        addr_clean = _addr_str(_to_address(to_addr)).lower().strip()
-        cur = self.withdrawable_balances.get(addr_clean, bigint(0))
-        self.withdrawable_balances[addr_clean] = cur + amount
-
-        # Direct on-chain native transfer
-        gl.get_contract_at(Address(addr_clean)).emit_transfer(value=amount)
 
     def _now(self) -> bigint:
         """Derive trusted deterministic execution timestamp strictly from runtime context with safe fallbacks."""
@@ -293,7 +282,7 @@ class Contract(gl.Contract):
 
         total_payout = deposit_val + creator_bond
         if total_payout > bigint(0):
-            self._safe_transfer(v.creator, total_payout)
+            _pay_native(v.creator, total_payout)
 
     @gl.public.write
     def propose_mutual_split(self, vault_id: str) -> None:
@@ -339,10 +328,10 @@ class Contract(gl.Contract):
 
         creator_total = half_deposit + creator_bond
         if creator_total > bigint(0):
-            self._safe_transfer(v.creator, creator_total)
+            _pay_native(v.creator, creator_total)
 
         if rem_deposit > bigint(0):
-            self._safe_transfer(v.licensee, rem_deposit)
+            _pay_native(v.licensee, rem_deposit)
 
     @gl.public.write
     def adjudicate_infringement(self, vault_id: str) -> None:
@@ -496,7 +485,7 @@ Respond ONLY with valid JSON without markdown:
             v.status = STATUS_FULL_SLASHED
             self.total_deposit_locked = self.total_deposit_locked - deposit_val
             self.total_disputes_resolved = self.total_disputes_resolved + u32(1)
-            self._safe_transfer(v.creator, deposit_val + creator_bond)
+            _pay_native(v.creator, deposit_val + creator_bond)
 
         elif verdict == "PARTIAL_INFRINGEMENT":
             v.status = STATUS_PARTIAL_SLASHED
@@ -506,9 +495,9 @@ Respond ONLY with valid JSON without markdown:
             half_deposit = deposit_val // bigint(2)
             rem_deposit = deposit_val - half_deposit
 
-            self._safe_transfer(v.creator, half_deposit + creator_bond)
+            _pay_native(v.creator, half_deposit + creator_bond)
             if rem_deposit > bigint(0):
-                self._safe_transfer(v.licensee, rem_deposit)
+                _pay_native(v.licensee, rem_deposit)
 
         else:
             v.status = STATUS_ACTIVE
@@ -520,7 +509,7 @@ Respond ONLY with valid JSON without markdown:
             v.defense_deadline = bigint(0)
 
             if creator_bond > bigint(0):
-                self._safe_transfer(v.licensee, creator_bond)
+                _pay_native(v.licensee, creator_bond)
 
     @gl.public.write
     def reclaim_deposit(self, vault_id: str) -> None:
@@ -545,7 +534,7 @@ Respond ONLY with valid JSON without markdown:
             creator_bond = v.creator_bond
             v.creator_bond = bigint(0)
             if creator_bond > bigint(0):
-                self._safe_transfer(v.creator, creator_bond)
+                _pay_native(v.creator, creator_bond)
 
         else:
             raise gl.UserError("Vault deposit is already settled or not yet funded.")
@@ -558,28 +547,7 @@ Respond ONLY with valid JSON without markdown:
         self.total_deposit_locked = self.total_deposit_locked - deposit_val
 
         if deposit_val > bigint(0):
-            self._safe_transfer(v.licensee, deposit_val)
-
-    @gl.public.write
-    def withdraw(self) -> None:
-        """
-        Non-custodial pull-payment pattern.
-        Allows users to withdraw credited balances if direct push transfers fail.
-        """
-        caller = _addr_str(_to_address(gl.message.sender_address)).lower().strip()
-        balance = self.withdrawable_balances.get(caller, bigint(0))
-        if balance <= bigint(0):
-            raise gl.UserError("No withdrawable balance available.")
-
-        # Zero out balance before external transfer to eliminate reentrancy
-        self.withdrawable_balances[caller] = bigint(0)
-        gl.get_contract_at(Address(caller)).emit_transfer(value=balance)
-
-    @gl.public.view
-    def get_withdrawable_balance(self, address) -> str:
-        """Return the current withdrawable balance for an address in wei."""
-        addr = _addr_str(_to_address(address)).lower().strip()
-        return str(self.withdrawable_balances.get(addr, bigint(0)))
+            _pay_native(v.licensee, deposit_val)
 
     # --- Read-only Views ---
 

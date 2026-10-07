@@ -38,10 +38,8 @@ export const App: React.FC = () => {
   // Wallet state
   const [account, setAccount] = useState<`0x${string}` | null>(null);
   const [balance, setBalance] = useState<bigint | null>(null);
-  const [withdrawableBalance, setWithdrawableBalance] = useState<bigint | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isFauceting, setIsFauceting] = useState(false);
-  const [isWithdrawing, setIsWithdrawing] = useState(false);
 
   // Contract data state
   const [stats, setStats] = useState<VaultStats | null>(null);
@@ -139,7 +137,6 @@ export const App: React.FC = () => {
 
   /**
    * Fetches real on-chain GEN balance directly from GenLayer Studionet RPC
-   * and queries accrued withdrawable credits from contract.
    */
   const fetchUserBalance = async (userAddr: `0x${string}`) => {
     try {
@@ -147,20 +144,6 @@ export const App: React.FC = () => {
       setBalance(realBal);
     } catch (err) {
       console.warn('Could not read user balance from Studionet RPC:', err);
-    }
-
-    try {
-      const rawCredits = await readContractStudionet({
-        address: CONTRACT_ADDRESS,
-        functionName: 'get_withdrawable_balance',
-        args: [userAddr],
-      });
-      if (rawCredits !== undefined && rawCredits !== null) {
-        const cleaned = String(rawCredits).replace(/["']/g, '').trim();
-        setWithdrawableBalance(BigInt(cleaned || '0'));
-      }
-    } catch (err) {
-      console.warn('Could not read withdrawable balance from Studionet contract:', err);
     }
   };
 
@@ -234,7 +217,6 @@ export const App: React.FC = () => {
         } else {
           setAccount(null);
           setBalance(null);
-          setWithdrawableBalance(null);
         }
       });
 
@@ -716,53 +698,6 @@ function assertFinishedWithReturn(receipt: any, actionName: string) {
     }
   };
 
-  /**
-   * Action 7: Withdraw accrued vault credits to connected wallet
-   */
-  const handleWithdrawCredits = async () => {
-    if (!account) {
-      await handleConnectWallet();
-      return;
-    }
-
-    let txHash: string | undefined;
-    try {
-      setIsWithdrawing(true);
-      setTxNotice({
-        type: 'info',
-        message: 'Withdrawing accrued vault credits to your wallet...',
-      });
-
-      txHash = await sendContractTransaction({
-        address: CONTRACT_ADDRESS,
-        functionName: 'withdraw',
-        args: [],
-        from: account,
-      });
-
-      const receipt = await waitForTransactionReceipt(txHash);
-      assertFinishedWithReturn(receipt, 'Credit withdrawal');
-
-      setTxNotice({
-        type: 'success',
-        message: 'Vault credits successfully claimed and withdrawn to your wallet!',
-        txHash,
-      });
-
-      await fetchContractData();
-      if (account) await fetchUserBalance(account);
-    } catch (err: any) {
-      console.error('Credit withdrawal failed:', err);
-      setTxNotice({
-        type: 'error',
-        message: err?.message || 'Credit withdrawal failed.',
-        txHash,
-      });
-    } finally {
-      setIsWithdrawing(false);
-    }
-  };
-
   // Filtered Vaults
   const filteredVaults = vaults.filter((v) => {
     if (filterStatus !== 'all') {
@@ -793,15 +728,12 @@ function assertFinishedWithReturn(receipt: any, actionName: string) {
       <Navbar
         account={account}
         balance={balance}
-        withdrawableBalance={withdrawableBalance}
         isConnecting={isConnecting}
         onConnect={handleConnectWallet}
         onRefresh={fetchContractData}
         isRefreshing={isRefreshing}
         onFaucet={handleFaucet}
         isFauceting={isFauceting}
-        onWithdraw={handleWithdrawCredits}
-        isWithdrawing={isWithdrawing}
       />
 
       {/* Main Container */}

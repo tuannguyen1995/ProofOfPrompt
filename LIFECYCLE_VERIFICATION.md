@@ -1,8 +1,8 @@
 # On-Chain Full Propose-Through-Reclaim Lifecycle Verification Report
 
-**Target Contract:** [`0xb655Affc7aA969EBFA0f4d66aE6381615dbFd7c9`](https://explorer-studio.genlayer.com/address/0xb655Affc7aA969EBFA0f4d66aE6381615dbFd7c9)  
+**Target Contract:** [`0x067fE00af215fa0f40F2F5A01de884250c5771a1`](https://explorer-studio.genlayer.com/address/0x067fE00af215fa0f40F2F5A01de884250c5771a1)  
 **Network:** GenLayer Studionet (Chain ID `61999` / `0xF1EF`)  
-**Deployment Tx Hash:** [`0xeea1839faf6826dfd95345302c08a824dab8ff2f9fda50becd9cf2f45c6c9c4c`](https://explorer-studio.genlayer.com/tx/0xeea1839faf6826dfd95345302c08a824dab8ff2f9fda50becd9cf2f45c6c9c4c)  
+**Execution Timestamp:** 2026-10-07T14:56:07.660936Z  
 **Vault ID Tested:** `ip-1`  
 
 ---
@@ -11,12 +11,11 @@
 
 | Stage | Action | Actor | Tx Hash | Result |
 |:---|:---|:---|:---|:---:|
-| **Stage 1: Propose** | `propose_license` | Creator (`0xF34587A45C397281Ef6BDd839d4A1de2DEe393ad`) | [`0xefb4d6d4f5dfdd41923a540da994dcdc1c7d468652f2adaf26befebaab3a9d1b`](https://explorer-studio.genlayer.com/tx/0xefb4d6d4f5dfdd41923a540da994dcdc1c7d468652f2adaf26befebaab3a9d1b) | ✅ `FINISHED_WITH_RETURN` (Status: `STATUS_OFFERED = 0`) |
-| **Stage 2: Accept & Fund** | `accept_and_fund_license` | Licensee (`0x70997970C51812dc3A010C7d01b50e0d17dc79C8`) | [`0xf8c30b7b959a88e0ff31b734ed65e8a5e37866239bd2c313c1169d145bd2199c`](https://explorer-studio.genlayer.com/tx/0xf8c30b7b959a88e0ff31b734ed65e8a5e37866239bd2c313c1169d145bd2199c) | ✅ `FINISHED_WITH_RETURN` (Status: `STATUS_ACTIVE = 1`, 0.5 GEN locked) |
+| **Stage 1: Propose** | `propose_license` | Creator (`0xF34587A45C397281Ef6BDd839d4A1de2DEe393ad`) | [`0x423255565153327352867c6f0ad0662e2bcecfa0e4f5e158d74ea53a34062513`](https://explorer-studio.genlayer.com/tx/0x423255565153327352867c6f0ad0662e2bcecfa0e4f5e158d74ea53a34062513) | ✅ `FINISHED_WITH_RETURN` (Status: `STATUS_OFFERED = 0`) |
+| **Stage 2: Accept & Fund** | `accept_and_fund_license` | Licensee (`0x70997970C51812dc3A010C7d01b50e0d17dc79C8`) | [`0x3ed42d1369576f772ca2f3262e79bbd79f4f62eb69fb5b26d48bf7736d4ec5ff`](https://explorer-studio.genlayer.com/tx/0x3ed42d1369576f772ca2f3262e79bbd79f4f62eb69fb5b26d48bf7736d4ec5ff) | ✅ `FINISHED_WITH_RETURN` (Status: `STATUS_ACTIVE = 1`, 0.5 GEN locked) |
 | **Stage 3: Term Window** | Block Time Advance | Network | *Time Elapsed* | ✅ Duration window expired cleanly |
-| **Stage 4: Reclaim** | `reclaim_deposit` | Licensee (`0x70997970C51812dc3A010C7d01b50e0d17dc79C8`) | [`0xcb5b098dcf93d2faa9f62f3e90b7f4416bf47dbc9eaac91eab7059c32d2a5fc8`](https://explorer-studio.genlayer.com/tx/0xcb5b098dcf93d2faa9f62f3e90b7f4416bf47dbc9eaac91eab7059c32d2a5fc8) | ✅ `FINISHED_WITH_RETURN` (Status: `STATUS_EXPIRED_REFUNDED = 8`, 100% direct native transfer emitted immediately to Licensee wallet via `emit_transfer`) |
+| **Stage 4: Reclaim** | `reclaim_deposit` | Licensee (`0x70997970C51812dc3A010C7d01b50e0d17dc79C8`) | [`0x9318c300cf7f75937cd61e4d2be28b2c8de66808a9e7269798885361aa1a78eb`](https://explorer-studio.genlayer.com/tx/0x9318c300cf7f75937cd61e4d2be28b2c8de66808a9e7269798885361aa1a78eb) | ✅ `FINISHED_WITH_RETURN` (Status: `STATUS_EXPIRED_REFUNDED = 8`, 100% direct native refund released to Licensee wallet) |
 
-*Note: The intermediate `withdrawable_balances` mapping and secondary `withdraw()` step have been completely eliminated. Direct native transfers (`emit_transfer`) disburse funds in a single transaction, preventing duplicate claims.*
 
 ---
 
@@ -40,13 +39,13 @@
   "reason": "License period ended with zero confirmed infringements. Deposit reclaimed.",
   "confidence": 0,
   "similarity_score": 0,
-  "created_at": "1791382948",
-  "activated_at": "1791382969",
-  "expires_at": "1791382979",
+  "created_at": "1791384894",
+  "activated_at": "1791384914",
+  "expires_at": "1791384924",
   "defense_deadline": "0",
   "split_proposer": "",
-  "created_at_block": "1791382948",
-  "expires_at_block": "1791382979"
+  "created_at_block": "1791384894",
+  "expires_at_block": "1791384924"
 }
 ```
 

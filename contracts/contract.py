@@ -31,7 +31,7 @@ def _pay_native(recipient, amount: bigint) -> None:
     if amount <= bigint(0):
         return
     addr = _to_address(recipient)
-    gl.get_contract_at(addr).emit_transfer(value=amount)
+    gl.get_contract_at(addr).emit_transfer(value=u256(int(amount)))
 
 
 # --- Protocol Status Lifecycle ---
@@ -533,6 +533,7 @@ Respond ONLY with valid JSON without markdown:
 
             creator_bond = v.creator_bond
             v.creator_bond = bigint(0)
+            self.total_deposit_locked = self.total_deposit_locked - creator_bond
             if creator_bond > bigint(0):
                 _pay_native(v.creator, creator_bond)
 
